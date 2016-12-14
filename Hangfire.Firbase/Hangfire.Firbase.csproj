@@ -81,6 +81,7 @@
   <ItemGroup>
     <Compile Include="FirebaseConnection.cs" />
     <Compile Include="FirebaseStorage.cs" />
+    <Compile Include="FirebaseStorageExtensions.cs" />
     <Compile Include="FirebaseStorageOptions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="FirebaseMonitoringApi.cs" />
