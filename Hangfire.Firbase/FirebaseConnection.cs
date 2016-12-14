@@ -5,11 +5,20 @@ using System.Collections.Generic;
 using Hangfire.Common;
 using Hangfire.Server;
 using Hangfire.Storage;
+using FireSharp;
+using FireSharp.Interfaces;
 
 namespace Hangfire.Firbase
 {
     public sealed class FirebaseConnection : JobStorageConnection
     {
+        private readonly FirebaseClient client;
+
+        public FirebaseConnection(IFirebaseConfig config)
+        {
+            client = new FirebaseClient(config);
+        }
+
         public override IDisposable AcquireDistributedLock(string resource, TimeSpan timeout)
         {
             throw new NotImplementedException();
