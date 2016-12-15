@@ -4,6 +4,7 @@ using FireSharp.Interfaces;
 
 using Hangfire.Storage;
 using Hangfire.Logging;
+using Hangfire.Firbase.Queue;
 
 namespace Hangfire.Firbase
 {
@@ -11,7 +12,9 @@ namespace Hangfire.Firbase
     {
         private readonly string url;
         private readonly IFirebaseConfig config;
-        private readonly FirebaseStorageOptions options;
+
+        public FirebaseStorageOptions Options { get; private set; }
+        public PersistentJobQueueProviderCollection QueueProviders { get; private set; }
 
         public FirebaseStorage(string url, string authSecret) : this(url, new FirebaseStorageOptions { AuthSecret = authSecret }) { }
 
@@ -25,7 +28,7 @@ namespace Hangfire.Firbase
             };
 
             this.url = url;
-            this.options = options;
+            Options = options;
 
             // prepare the schema
             if (options.PrepareSchema)
@@ -45,8 +48,8 @@ namespace Hangfire.Firbase
         {
             logger.Info("Using the following options for Firebase job storage:");
             logger.Info($"     Firebase Url: {url}");
-            logger.Info($"     Request Timeout: {options.RequestTimeout}");
-            logger.Info($"     Prepare Schema: {options.PrepareSchema}");
+            logger.Info($"     Request Timeout: {Options.RequestTimeout}");
+            logger.Info($"     Queue: {string.Join(",", Options.Queues)}");
         }
 
     }

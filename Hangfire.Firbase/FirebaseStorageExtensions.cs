@@ -5,7 +5,7 @@ namespace Hangfire
 {
     public static class FirebaseStorageExtensions
     {
-        public static IGlobalConfiguration<FirebaseStorage> UseSqlServerStorage(this IGlobalConfiguration configuration, string url, string authSecret)
+        public static IGlobalConfiguration<FirebaseStorage> UseFirebaseStorage(this IGlobalConfiguration configuration, string url, string authSecret)
         {
             if (configuration == null) throw new ArgumentNullException(nameof(configuration));
             if (string.IsNullOrEmpty(url)) throw new ArgumentNullException(nameof(url));
@@ -15,7 +15,7 @@ namespace Hangfire
             return configuration.UseStorage(storage);
         }
 
-        public static IGlobalConfiguration<FirebaseStorage> UseSqlServerStorage(this IGlobalConfiguration configuration, string url, FirebaseStorageOptions options)
+        public static IGlobalConfiguration<FirebaseStorage> UseFirebaseStorage(this IGlobalConfiguration configuration, string url, FirebaseStorageOptions options)
         {
             if (configuration == null) throw new ArgumentNullException(nameof(configuration));
             if (string.IsNullOrEmpty(url)) throw new ArgumentNullException(nameof(url));

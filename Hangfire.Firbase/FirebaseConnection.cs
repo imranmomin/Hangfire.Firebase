@@ -12,11 +12,11 @@ namespace Hangfire.Firbase
 {
     public sealed class FirebaseConnection : JobStorageConnection
     {
-        private readonly FirebaseClient client;
+        public FirebaseClient Client { get; private set; }
 
         public FirebaseConnection(IFirebaseConfig config)
         {
-            client = new FirebaseClient(config);
+            Client = new FirebaseClient(config);
         }
 
         public override IDisposable AcquireDistributedLock(string resource, TimeSpan timeout)
