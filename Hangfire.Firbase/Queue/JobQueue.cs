@@ -17,12 +17,14 @@ namespace Hangfire.Firbase.Queue
             this.connection = (FirebaseConnection)storage.GetConnection();
         }
 
-        public async Task<IFetchedJob> Dequeue(CancellationToken cancellationToken)
+        public async Task<IFetchedJob> Dequeue(string[] queues, CancellationToken cancellationToken)
         {
             FetchedJob job = null;
 
             response = await connection.Client.OnAsync("queue", (sender, args, context) =>
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 job = new FetchedJob(storage, string.Empty, args.Data);
                 response.Cancel();
             });

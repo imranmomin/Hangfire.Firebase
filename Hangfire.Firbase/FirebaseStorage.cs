@@ -40,7 +40,7 @@ namespace Hangfire.Firbase
             }
         }
 
-        public override IStorageConnection GetConnection() => new FirebaseConnection(config);
+        public override IStorageConnection GetConnection() => new FirebaseConnection(config, QueueProviders);
 
         public override IMonitoringApi GetMonitoringApi() => new FirebaseMonitoringApi();
 

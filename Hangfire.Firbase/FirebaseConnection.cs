@@ -1,20 +1,25 @@
 ﻿using System;
+using System.Linq;
 using System.Threading;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 using Hangfire.Common;
 using Hangfire.Server;
 using Hangfire.Storage;
 using FireSharp;
 using FireSharp.Interfaces;
+using Hangfire.Firbase.Queue;
+using FireSharp.Response;
 
 namespace Hangfire.Firbase
 {
     public sealed class FirebaseConnection : JobStorageConnection
     {
         public FirebaseClient Client { get; private set; }
+        public PersistentJobQueueProviderCollection QueueProviders { get; private set; }
 
-        public FirebaseConnection(IFirebaseConfig config)
+        public FirebaseConnection(IFirebaseConfig config, PersistentJobQueueProviderCollection QueueProviders)
         {
             Client = new FirebaseClient(config);
         }
@@ -31,7 +36,42 @@ namespace Hangfire.Firbase
 
         public override string CreateExpiredJob(Job job, IDictionary<string, string> parameters, DateTime createdAt, TimeSpan expireIn)
         {
-            throw new NotImplementedException();
+            if (job == null) throw new ArgumentNullException(nameof(job));
+            if (parameters == null) throw new ArgumentNullException(nameof(parameters));
+
+            InvocationData invocationData = InvocationData.Serialize(job);
+            PushResponse response = Client.Push("jobs", new Entities.Job
+            {
+                InvocationData = invocationData,
+                Arguments = invocationData.Arguments,
+                CreatedOn = createdAt,
+                ExpireOn = createdAt.Add(expireIn)
+            });
+
+            if (response.StatusCode == System.Net.HttpStatusCode.OK)
+            {
+                string reference = response.Result.name;
+                if (parameters.Count > 0)
+                {
+                    List<Entities.Parameter> para = new List<Entities.Parameter>();
+                    foreach (var parameter in parameters)
+                    {
+                        para.Add(new Entities.Parameter
+                        {
+                            Name = parameter.Key,
+                            Value = parameter.Value
+                        });
+                    }
+                    SetResponse result = Client.Set($"jobs/{reference}/parameters", para);
+                    if (result.StatusCode != System.Net.HttpStatusCode.OK)
+                    {
+                        throw new System.Net.WebException();
+                    }
+                }
+                return reference;
+            }
+
+            throw new InvalidOperationException();
         }
 
         public override IWriteOnlyTransaction CreateWriteTransaction()
@@ -41,7 +81,20 @@ namespace Hangfire.Firbase
 
         public override IFetchedJob FetchNextJob(string[] queues, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            if (queues == null || queues.Length == 0) throw new ArgumentNullException(nameof(queues));
+
+            IPersistentJobQueueProvider[] providers = queues.Select(q => QueueProviders.GetProvider(q))
+                                                            .Distinct()
+                                                            .ToArray();
+
+            if (providers.Length != 1)
+            {
+                throw new InvalidOperationException($"Multiple provider instances registered for queues: {string.Join(", ", queues)}. You should choose only one type of persistent queues per server instance.");
+            }
+
+            IPersistentJobQueue persistentQueue = providers.Single().GetJobQueue();
+            Task<IFetchedJob> queue = persistentQueue.Dequeue(queues, cancellationToken);
+            return queue.Result;
         }
 
         public override Dictionary<string, string> GetAllEntriesFromHash(string key)
@@ -61,7 +114,37 @@ namespace Hangfire.Firbase
 
         public override JobData GetJobData(string jobId)
         {
-            throw new NotImplementedException();
+            if (jobId == null) throw new ArgumentNullException(nameof(jobId));
+
+            FirebaseResponse response = Client.Get($"jobs/{jobId}");
+            if (response.StatusCode == System.Net.HttpStatusCode.OK)
+            {
+                Entities.Job data = response.ResultAs<Entities.Job>();
+                InvocationData invocationData = data.InvocationData;
+                invocationData.Arguments = data.Arguments;
+
+                Job job = null;
+                JobLoadException loadException = null;
+
+                try
+                {
+                    job = invocationData.Deserialize();
+                }
+                catch (JobLoadException ex)
+                {
+                    loadException = ex;
+                }
+
+                return new JobData
+                {
+                    Job = job,
+                    State = data.StateName,
+                    CreatedAt = data.CreatedOn,
+                    LoadException = loadException
+                };
+            }
+
+            return null;
         }
 
         public override string GetJobParameter(string id, string name)
