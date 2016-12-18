@@ -80,6 +80,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Entities\Job.cs" />
+    <Compile Include="Entities\List.cs" />
     <Compile Include="Entities\Parameter.cs" />
     <Compile Include="FirebaseConnection.cs" />
     <Compile Include="FirebaseStorage.cs" />

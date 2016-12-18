@@ -181,5 +181,62 @@ namespace Hangfire.Firbase
         {
             throw new NotImplementedException();
         }
+
+        public override List<string> GetAllItemsFromList(string key)
+        {
+            if (key == null) throw new ArgumentNullException(nameof(key));
+
+            FirebaseResponse response = Client.Get($"list/{key}");
+            if (response.StatusCode == System.Net.HttpStatusCode.OK)
+            {
+                List<Entities.List> lists = response.ResultAs<List<Entities.List>>();
+                return lists.Select(v => v.Value).ToList();
+            }
+
+            return new List<string>();
+        }
+
+        public override List<string> GetRangeFromList(string key, int startingFrom, int endingAt)
+        {
+            if (key == null) throw new ArgumentNullException(nameof(key));
+
+            FirebaseResponse response = Client.Get($"list/{key}");
+            if (response.StatusCode == System.Net.HttpStatusCode.OK)
+            {
+                List<Entities.List> lists = response.ResultAs<List<Entities.List>>();
+                return lists.Skip(startingFrom).Take(endingAt).Select(v => v.Value).ToList();
+            }
+
+            return new List<string>();
+        }
+
+        public override TimeSpan GetListTtl(string key)
+        {
+            if (key == null) throw new ArgumentNullException(nameof(key));
+
+            FirebaseResponse response = Client.Get($"list/{key}");
+            if (response.StatusCode == System.Net.HttpStatusCode.OK)
+            {
+                List<Entities.List> lists = response.ResultAs<List<Entities.List>>();
+                return lists.Min(l => l.ExpireOn).Value - DateTime.UtcNow;
+            }
+
+            return TimeSpan.FromSeconds(-1);
+        }
+
+        public override long GetListCount(string key)
+        {
+            if (key == null) throw new ArgumentNullException(nameof(key));
+
+            FirebaseResponse response = Client.Get($"list/{key}");
+            if (response.StatusCode == System.Net.HttpStatusCode.OK)
+            {
+                List<Entities.List> lists = response.ResultAs<List<Entities.List>>();
+                return lists.LongCount();
+            }
+
+            return default(long);
+        }
+
     }
 }
