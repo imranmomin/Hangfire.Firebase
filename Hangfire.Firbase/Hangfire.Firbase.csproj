@@ -79,6 +79,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Entities\Hash.cs" />
     <Compile Include="Entities\Job.cs" />
     <Compile Include="Entities\List.cs" />
     <Compile Include="Entities\Parameter.cs" />

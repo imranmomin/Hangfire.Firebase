@@ -16,12 +16,13 @@ namespace Hangfire.Firbase
 {
     public sealed class FirebaseConnection : JobStorageConnection
     {
-        public FirebaseClient Client { get; private set; }
-        public PersistentJobQueueProviderCollection QueueProviders { get; private set; }
+        public FirebaseClient Client { get; }
+        public PersistentJobQueueProviderCollection QueueProviders { get; }
 
-        public FirebaseConnection(IFirebaseConfig config, PersistentJobQueueProviderCollection QueueProviders)
+        public FirebaseConnection(IFirebaseConfig config, PersistentJobQueueProviderCollection queueProviders)
         {
             Client = new FirebaseClient(config);
+            QueueProviders = queueProviders;
         }
 
         public override IDisposable AcquireDistributedLock(string resource, TimeSpan timeout)
@@ -182,15 +183,65 @@ namespace Hangfire.Firbase
             throw new NotImplementedException();
         }
 
+        #region Hash
+
+        public override long GetHashCount(string key)
+        {
+            if (key == null) throw new ArgumentNullException(nameof(key));
+
+            FirebaseResponse response = Client.Get("hash");
+            if (response.StatusCode == System.Net.HttpStatusCode.OK)
+            {
+                List<Entities.Hash> hashes = response.ResultAs<List<Entities.Hash>>();
+                return hashes.Where(h => h.Key == key).LongCount();
+            }
+
+            return default(long);
+        }
+
+        public override string GetValueFromHash(string key, string name)
+        {
+            if (key == null) throw new ArgumentNullException(nameof(key));
+            if (name == null) throw new ArgumentNullException(nameof(name));
+
+            FirebaseResponse response = Client.Get("hash");
+            if (response.StatusCode == System.Net.HttpStatusCode.OK)
+            {
+                List<Entities.Hash> hashes = response.ResultAs<List<Entities.Hash>>();
+                return hashes.Where(h => h.Key == key && h.Value == name).Select(v => v.Value).FirstOrDefault();
+            }
+
+            return null;
+        }
+
+        public override TimeSpan GetHashTtl(string key)
+        {
+            if (key == null) throw new ArgumentNullException(nameof(key));
+
+            FirebaseResponse response = Client.Get("hash");
+            if (response.StatusCode == System.Net.HttpStatusCode.OK)
+            {
+                List<Entities.Hash> hashes = response.ResultAs<List<Entities.Hash>>();
+                DateTime? expireOn = hashes.Where(h => h.Key == key).Min(v => v.ExpireOn);
+                if (expireOn.HasValue) return expireOn.Value - DateTime.UtcNow;
+            }
+
+            return TimeSpan.FromSeconds(-1);
+        }
+
+        #endregion
+
+        #region List
+
         public override List<string> GetAllItemsFromList(string key)
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            FirebaseResponse response = Client.Get($"list/{key}");
+            FirebaseResponse response = Client.Get("list");
             if (response.StatusCode == System.Net.HttpStatusCode.OK)
             {
                 List<Entities.List> lists = response.ResultAs<List<Entities.List>>();
-                return lists.Select(v => v.Value).ToList();
+                return lists.Where(l => l.Key == key).Select(l => l.Value).ToList();
             }
 
             return new List<string>();
@@ -200,11 +251,11 @@ namespace Hangfire.Firbase
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            FirebaseResponse response = Client.Get($"list/{key}");
+            FirebaseResponse response = Client.Get("list");
             if (response.StatusCode == System.Net.HttpStatusCode.OK)
             {
                 List<Entities.List> lists = response.ResultAs<List<Entities.List>>();
-                return lists.Skip(startingFrom).Take(endingAt).Select(v => v.Value).ToList();
+                return lists.Where(l => l.Key == key).OrderBy(l => l.ExpireOn).Skip(startingFrom).Take(endingAt).Select(l => l.Value).ToList();
             }
 
             return new List<string>();
@@ -214,11 +265,12 @@ namespace Hangfire.Firbase
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            FirebaseResponse response = Client.Get($"list/{key}");
+            FirebaseResponse response = Client.Get("list");
             if (response.StatusCode == System.Net.HttpStatusCode.OK)
             {
                 List<Entities.List> lists = response.ResultAs<List<Entities.List>>();
-                return lists.Min(l => l.ExpireOn).Value - DateTime.UtcNow;
+                DateTime? expireOn = lists.Where(l => l.Key == key).Min(l => l.ExpireOn);
+                if (expireOn.HasValue) return expireOn.Value - DateTime.UtcNow;
             }
 
             return TimeSpan.FromSeconds(-1);
@@ -228,15 +280,17 @@ namespace Hangfire.Firbase
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            FirebaseResponse response = Client.Get($"list/{key}");
+            FirebaseResponse response = Client.Get("list");
             if (response.StatusCode == System.Net.HttpStatusCode.OK)
             {
                 List<Entities.List> lists = response.ResultAs<List<Entities.List>>();
-                return lists.LongCount();
+                return lists.Where(l => l.Key == key).LongCount();
             }
 
             return default(long);
         }
+
+        #endregion
 
     }
 }
