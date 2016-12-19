@@ -16,13 +16,13 @@ namespace Hangfire.Firbase
         public FirebaseStorageOptions Options { get; private set; }
         public PersistentJobQueueProviderCollection QueueProviders { get; private set; }
 
-        public FirebaseStorage(string url, string authSecret) : this(url, new FirebaseStorageOptions { AuthSecret = authSecret }) { }
+        public FirebaseStorage(string url, string authSecret) : this(url, authSecret, new FirebaseStorageOptions()) { }
 
-        public FirebaseStorage(string url, FirebaseStorageOptions options)
+        public FirebaseStorage(string url, string authSecret, FirebaseStorageOptions options)
         {
             config = new FirebaseConfig
             {
-                AuthSecret = options.AuthSecret,
+                AuthSecret = authSecret,
                 BasePath = url,
                 RequestTimeout = options.RequestTimeout
             };

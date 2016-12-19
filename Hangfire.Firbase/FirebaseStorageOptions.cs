@@ -4,7 +4,6 @@ namespace Hangfire.Firbase
 {
     public class FirebaseStorageOptions
     {
-        public string AuthSecret { get; set; }
         public TimeSpan? RequestTimeout { get; set; }
         public bool PrepareSchema { get; set; }
         public string[] Queues { get; set; }
@@ -13,7 +12,7 @@ namespace Hangfire.Firbase
         {
             RequestTimeout = TimeSpan.FromSeconds(30);
             PrepareSchema = true;
-            Queues = new[] {"default"};
+            Queues = new[] { "default" };
         }
     }
 }
