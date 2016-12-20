@@ -4,9 +4,9 @@ using FireSharp.Interfaces;
 
 using Hangfire.Storage;
 using Hangfire.Logging;
-using Hangfire.Firbase.Queue;
+using Hangfire.Firebase.Queue;
 
-namespace Hangfire.Firbase
+namespace Hangfire.Firebase
 {
     public sealed class FirebaseStorage : JobStorage
     {

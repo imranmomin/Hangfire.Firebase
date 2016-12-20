@@ -2,7 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 
-namespace Hangfire.Firbase.Queue
+namespace Hangfire.Firebase.Queue
 {
     public sealed class PersistentJobQueueProviderCollection : IEnumerable<IPersistentJobQueueProvider>
     {

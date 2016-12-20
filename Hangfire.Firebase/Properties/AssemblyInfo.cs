@@ -5,11 +5,11 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("Hangfire.Firbase")]
+[assembly: AssemblyTitle("Hangfire.Firebase")]
 [assembly: AssemblyDescription("Firebase storage provider for Hangfire")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("Hangfire.Firbase")]
+[assembly: AssemblyProduct("Hangfire.Firebase")]
 [assembly: AssemblyCopyright("")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]

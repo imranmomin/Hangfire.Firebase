@@ -7,8 +7,8 @@
     <ProjectGuid>{0F3F1AF7-3C54-43B5-AD4E-005548BF9971}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Hangfire.Firbase</RootNamespace>
-    <AssemblyName>Hangfire.Firbase</AssemblyName>
+    <RootNamespace>Hangfire.Firebase</RootNamespace>
+    <AssemblyName>Hangfire.Firebase</AssemblyName>
     <TargetFrameworkVersion>v4.6</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />

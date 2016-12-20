@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using Hangfire.Storage;
 using FireSharp.Response;
 
-namespace Hangfire.Firbase.Queue
+namespace Hangfire.Firebase.Queue
 {
     internal class JobQueue : IPersistentJobQueue
     {

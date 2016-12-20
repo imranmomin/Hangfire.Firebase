@@ -2,7 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Hangfire.Firbase.Queue
+namespace Hangfire.Firebase.Queue
 {
     public interface IPersistentJobQueue
     {

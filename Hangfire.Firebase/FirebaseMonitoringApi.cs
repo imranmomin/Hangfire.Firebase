@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Hangfire.Storage;
 using Hangfire.Storage.Monitoring;
 
-namespace Hangfire.Firbase
+namespace Hangfire.Firebase
 {
    public sealed class FirebaseMonitoringApi : IMonitoringApi
     {

@@ -1,5 +1,5 @@
 ﻿using System;
-using Hangfire.Firbase;
+using Hangfire.Firebase;
 
 namespace Hangfire
 {

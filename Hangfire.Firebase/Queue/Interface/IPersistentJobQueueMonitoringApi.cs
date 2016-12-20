@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace Hangfire.Firbase.Queue
+namespace Hangfire.Firebase.Queue
 {
     public interface IPersistentJobQueueMonitoringApi
     {

@@ -9,11 +9,11 @@ using Hangfire.Server;
 using Hangfire.Storage;
 using FireSharp;
 using FireSharp.Interfaces;
-using Hangfire.Firbase.Queue;
+using Hangfire.Firebase.Queue;
 using FireSharp.Response;
-using Hangfire.Firbase.Entities;
+using Hangfire.Firebase.Entities;
 
-namespace Hangfire.Firbase
+namespace Hangfire.Firebase
 {
     public sealed class FirebaseConnection : JobStorageConnection
     {

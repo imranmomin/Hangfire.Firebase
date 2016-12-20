@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using FireSharp;
 using FireSharp.Response;
 
-namespace Hangfire.Firbase.Queue
+namespace Hangfire.Firebase.Queue
 {
     internal class JobQueueMonitoringApi : IPersistentJobQueueMonitoringApi
     {

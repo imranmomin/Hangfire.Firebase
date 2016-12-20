@@ -1,7 +1,7 @@
 ﻿using System;
 using Hangfire.Storage;
 
-namespace Hangfire.Firbase.Entities
+namespace Hangfire.Firebase.Entities
 {
     internal class Job
     {

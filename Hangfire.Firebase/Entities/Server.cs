@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Hangfire.Firbase.Entities
+namespace Hangfire.Firebase.Entities
 {
     internal class Server
     {

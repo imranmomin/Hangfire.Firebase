@@ -1,4 +1,4 @@
-﻿namespace Hangfire.Firbase.Queue
+﻿namespace Hangfire.Firebase.Queue
 {
     public interface IPersistentJobQueueProvider
     {

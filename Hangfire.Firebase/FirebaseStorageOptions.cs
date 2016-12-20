@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Hangfire.Firbase
+namespace Hangfire.Firebase
 {
     public class FirebaseStorageOptions
     {

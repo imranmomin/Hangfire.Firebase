@@ -2,7 +2,7 @@
 using FireSharp.Response;
 using Hangfire.Storage;
 
-namespace Hangfire.Firbase.Queue
+namespace Hangfire.Firebase.Queue
 {
     internal class FetchedJob : IFetchedJob
     {
