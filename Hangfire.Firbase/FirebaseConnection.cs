@@ -11,6 +11,7 @@ using FireSharp;
 using FireSharp.Interfaces;
 using Hangfire.Firbase.Queue;
 using FireSharp.Response;
+using Hangfire.Firbase.Entities;
 
 namespace Hangfire.Firbase
 {
@@ -35,7 +36,7 @@ namespace Hangfire.Firbase
             throw new NotImplementedException();
         }
 
-        public override string CreateExpiredJob(Job job, IDictionary<string, string> parameters, DateTime createdAt, TimeSpan expireIn)
+        public override string CreateExpiredJob(Common.Job job, IDictionary<string, string> parameters, DateTime createdAt, TimeSpan expireIn)
         {
             if (job == null) throw new ArgumentNullException(nameof(job));
             if (parameters == null) throw new ArgumentNullException(nameof(parameters));
@@ -54,10 +55,10 @@ namespace Hangfire.Firbase
                 string reference = response.Result.name;
                 if (parameters.Count > 0)
                 {
-                    List<Entities.Parameter> para = new List<Entities.Parameter>();
+                    List<Parameter> para = new List<Parameter>();
                     foreach (var parameter in parameters)
                     {
-                        para.Add(new Entities.Parameter
+                        para.Add(new Parameter
                         {
                             Name = parameter.Key,
                             Value = parameter.Value
@@ -124,7 +125,7 @@ namespace Hangfire.Firbase
                 InvocationData invocationData = data.InvocationData;
                 invocationData.Arguments = data.Arguments;
 
-                Job job = null;
+                Common.Job job = null;
                 JobLoadException loadException = null;
 
                 try
@@ -170,7 +171,17 @@ namespace Hangfire.Firbase
 
         public override int RemoveTimedOutServers(TimeSpan timeOut)
         {
-            throw new NotImplementedException();
+            if (timeOut.Duration() != timeOut)
+            {
+                throw new ArgumentException("The `timeOut` value must be positive.", nameof(timeOut));
+            }
+
+            FirebaseResponse response = Client.Get("servers");
+            List<Entities.Server> servers = response.ResultAs<List<Entities.Server>>();
+            servers = servers.Where(s => s.LastHeartbeat < DateTime.UtcNow.Add(timeOut.Negate())).ToList();
+            servers.ForEach(server => Client.Delete($"servers/{server.Id}"));
+
+            return servers.Count;
         }
 
         public override void SetJobParameter(string id, string name, string value)
@@ -192,7 +203,7 @@ namespace Hangfire.Firbase
             FirebaseResponse response = Client.Get("hash");
             if (response.StatusCode == System.Net.HttpStatusCode.OK)
             {
-                List<Entities.Hash> hashes = response.ResultAs<List<Entities.Hash>>();
+                List<Hash> hashes = response.ResultAs<List<Hash>>();
                 return hashes.Where(h => h.Key == key).LongCount();
             }
 
@@ -207,7 +218,7 @@ namespace Hangfire.Firbase
             FirebaseResponse response = Client.Get("hash");
             if (response.StatusCode == System.Net.HttpStatusCode.OK)
             {
-                List<Entities.Hash> hashes = response.ResultAs<List<Entities.Hash>>();
+                List<Hash> hashes = response.ResultAs<List<Hash>>();
                 return hashes.Where(h => h.Key == key && h.Value == name).Select(v => v.Value).FirstOrDefault();
             }
 
@@ -221,7 +232,7 @@ namespace Hangfire.Firbase
             FirebaseResponse response = Client.Get("hash");
             if (response.StatusCode == System.Net.HttpStatusCode.OK)
             {
-                List<Entities.Hash> hashes = response.ResultAs<List<Entities.Hash>>();
+                List<Hash> hashes = response.ResultAs<List<Hash>>();
                 DateTime? expireOn = hashes.Where(h => h.Key == key).Min(v => v.ExpireOn);
                 if (expireOn.HasValue) return expireOn.Value - DateTime.UtcNow;
             }
@@ -240,7 +251,7 @@ namespace Hangfire.Firbase
             FirebaseResponse response = Client.Get("list");
             if (response.StatusCode == System.Net.HttpStatusCode.OK)
             {
-                List<Entities.List> lists = response.ResultAs<List<Entities.List>>();
+                List<List> lists = response.ResultAs<List<List>>();
                 return lists.Where(l => l.Key == key).Select(l => l.Value).ToList();
             }
 
@@ -254,7 +265,7 @@ namespace Hangfire.Firbase
             FirebaseResponse response = Client.Get("list");
             if (response.StatusCode == System.Net.HttpStatusCode.OK)
             {
-                List<Entities.List> lists = response.ResultAs<List<Entities.List>>();
+                List<List> lists = response.ResultAs<List<List>>();
                 return lists.Where(l => l.Key == key).OrderBy(l => l.ExpireOn).Skip(startingFrom).Take(endingAt).Select(l => l.Value).ToList();
             }
 
@@ -268,7 +279,7 @@ namespace Hangfire.Firbase
             FirebaseResponse response = Client.Get("list");
             if (response.StatusCode == System.Net.HttpStatusCode.OK)
             {
-                List<Entities.List> lists = response.ResultAs<List<Entities.List>>();
+                List<List> lists = response.ResultAs<List<List>>();
                 DateTime? expireOn = lists.Where(l => l.Key == key).Min(l => l.ExpireOn);
                 if (expireOn.HasValue) return expireOn.Value - DateTime.UtcNow;
             }
@@ -283,7 +294,7 @@ namespace Hangfire.Firbase
             FirebaseResponse response = Client.Get("list");
             if (response.StatusCode == System.Net.HttpStatusCode.OK)
             {
-                List<Entities.List> lists = response.ResultAs<List<Entities.List>>();
+                List<List> lists = response.ResultAs<List<List>>();
                 return lists.Where(l => l.Key == key).LongCount();
             }
 
