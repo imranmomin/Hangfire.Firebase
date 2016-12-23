@@ -33,6 +33,12 @@ namespace Hangfire.Firebase
             throw new NotImplementedException();
         }
 
+        public override IWriteOnlyTransaction CreateWriteTransaction()
+        {
+            throw new NotImplementedException();
+        }
+
+        #region Job
 
         public override string CreateExpiredJob(Common.Job job, IDictionary<string, string> parameters, DateTime createdAt, TimeSpan expireIn)
         {
@@ -53,30 +59,31 @@ namespace Hangfire.Firebase
                 string reference = response.Result.name;
                 if (parameters.Count > 0)
                 {
-                    List<Parameter> para = new List<Parameter>();
-                    foreach (var parameter in parameters)
+                    List<Parameter> jobParameters = parameters.Select(parameter => new Parameter
                     {
-                        para.Add(new Parameter
-                        {
-                            Name = parameter.Key,
-                            Value = parameter.Value
-                        });
-                    }
-                    SetResponse result = Client.Set($"jobs/{reference}/parameters", para);
-                    if (result.StatusCode != HttpStatusCode.OK)
+                        Name = parameter.Key,
+                        Value = parameter.Value
+                    }).ToList();
+
+                    List<Task<PushResponse>> tasks = new List<Task<PushResponse>>();
+                    jobParameters.ForEach(parameter =>
                     {
-                        throw new System.Net.WebException();
+                        Task<PushResponse> task = Task.Run(() => Client.Push($"jobs/{reference}/parameters", parameter));
+                        tasks.Add(task);
+                    });
+                    Task.WaitAll(tasks.ToArray());
+
+                    bool isFailed = tasks.Any(t => t.Result.StatusCode != HttpStatusCode.OK);
+                    if (isFailed)
+                    {
+                        string body = string.Join("; ", tasks.Where(t => t.Result.StatusCode != HttpStatusCode.OK).Select(t => t.Result.Body));
+                        throw new HttpRequestException(body);
                     }
                 }
                 return reference;
             }
 
-            throw new InvalidOperationException();
-        }
-
-        public override IWriteOnlyTransaction CreateWriteTransaction()
-        {
-            throw new NotImplementedException();
+            return null;
         }
 
         public override IFetchedJob FetchNextJob(string[] queues, CancellationToken cancellationToken)
@@ -132,6 +139,8 @@ namespace Hangfire.Firebase
             return null;
         }
 
+        #endregion
+
         #region Parameter
 
         public override string GetJobParameter(string id, string name)
@@ -154,16 +163,37 @@ namespace Hangfire.Firebase
             if (id == null) throw new ArgumentNullException(nameof(id));
             if (name == null) throw new ArgumentNullException(nameof(name));
 
-            Parameter parameter = new Parameter
+            bool isExsits = false;
+            FirebaseResponse response = Client.Get($"jobs/{id}/parameters");
+            if (response.StatusCode == HttpStatusCode.OK)
             {
-                Name = name,
-                Value = value
-            };
+                Dictionary<string, Parameter> parameters = response.ResultAs<Dictionary<string, Parameter>>();
+                string parameterReference = parameters.Where(p => p.Value.Name == name).Select(p => p.Key).FirstOrDefault();
+                if (!string.IsNullOrEmpty(parameterReference))
+                {
+                    isExsits = true;
+                    response = Client.Set($"jobs/{id}/parameters/{parameterReference}/value", value);
+                    if (response.StatusCode != HttpStatusCode.OK)
+                    {
+                        throw new HttpRequestException(response.Body);
+                    }
+                }
+            }
 
-            PushResponse response = Client.Push($"jobs/{id}/parameters", parameter);
-            if (response.StatusCode != HttpStatusCode.OK)
+            // new parameter
+            if (!isExsits)
             {
-                throw new HttpRequestException(response.Body);
+                Parameter parameter = new Parameter
+                {
+                    Name = name,
+                    Value = value
+                };
+
+                response = Client.Push($"jobs/{id}/parameters", parameter);
+                if (response.StatusCode != HttpStatusCode.OK)
+                {
+                    throw new HttpRequestException(response.Body);
+                }
             }
         }
 
@@ -192,17 +222,80 @@ namespace Hangfire.Firebase
 
         public override void AnnounceServer(string serverId, ServerContext context)
         {
-            throw new NotImplementedException();
+            if (serverId == null) throw new ArgumentNullException(nameof(serverId));
+            if (context == null) throw new ArgumentNullException(nameof(context));
+
+            FirebaseResponse response = Client.Get("servers");
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                Dictionary<string, Entities.Server> servers = response.ResultAs<Dictionary<string, Entities.Server>>();
+                string serverReferenceKey = servers.Where(s => s.Value.Id == serverId).Select(s => s.Key).FirstOrDefault();
+                Entities.Server server;
+
+                if (!string.IsNullOrEmpty(serverReferenceKey) && servers.TryGetValue(serverReferenceKey, out server))
+                {
+                    server.LastHeartbeat = DateTime.UtcNow;
+                    server.Workers = context.WorkerCount;
+                    server.Queues = context.Queues;
+
+                    response = Client.Set($"servers/{serverReferenceKey}", server);
+                    if (response.StatusCode != HttpStatusCode.OK)
+                    {
+                        throw new HttpRequestException(response.Body);
+                    }
+                }
+                else
+                {
+                    server = new Entities.Server
+                    {
+                        Id = serverId,
+                        Workers = context.WorkerCount,
+                        Queues = context.Queues,
+                        CreatedOn = DateTime.UtcNow,
+                        LastHeartbeat = DateTime.UtcNow
+                    };
+
+                    response = Client.Push("servers", server);
+                    if (response.StatusCode != HttpStatusCode.OK)
+                    {
+                        throw new HttpRequestException(response.Body);
+                    }
+                }
+            }
         }
 
         public override void Heartbeat(string serverId)
         {
-            throw new NotImplementedException();
+            if (serverId == null) throw new ArgumentNullException(nameof(serverId));
+            FirebaseResponse response = Client.Get("servers");
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                Dictionary<string, Entities.Server> servers = response.ResultAs<Dictionary<string, Entities.Server>>();
+                string serverReferenceKey = servers.Where(s => s.Value.Id == serverId).Select(s => s.Key).FirstOrDefault();
+                Entities.Server server;
+                if (!string.IsNullOrEmpty(serverReferenceKey) && servers.TryGetValue(serverReferenceKey, out server))
+                {
+                    server.LastHeartbeat = DateTime.UtcNow;
+                    SetResponse setResponse = Client.Set($"servers/{serverReferenceKey}", server);
+                    if (setResponse.StatusCode != HttpStatusCode.OK)
+                    {
+                        throw new HttpRequestException(setResponse.Body);
+                    }
+                }
+            }
         }
 
         public override void RemoveServer(string serverId)
         {
-            throw new NotImplementedException();
+            if (serverId == null) throw new ArgumentNullException(nameof(serverId));
+
+            FirebaseResponse response = Client.Get("servers");
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                Dictionary<string, Entities.Server> servers = response.ResultAs<Dictionary<string, Entities.Server>>();
+                string server = servers.Where(s => s.Value.Id == serverId).Select(s => s.Key).Single();
+                Client.Delete($"servers/{server}");
+            }
         }
 
         public override int RemoveTimedOutServers(TimeSpan timeOut)
@@ -213,11 +306,21 @@ namespace Hangfire.Firebase
             }
 
             FirebaseResponse response = Client.Get("servers");
-            List<Entities.Server> servers = response.ResultAs<List<Entities.Server>>();
-            servers = servers.Where(s => s.LastHeartbeat < DateTime.UtcNow.Add(timeOut.Negate())).ToList();
-            servers.ForEach(server => Client.Delete($"servers/{server.Id}"));
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                Dictionary<string, Entities.Server> servers = response.ResultAs<Dictionary<string, Entities.Server>>();
 
-            return servers.Count;
+                // get the firebase reference key for each timeout server
+                DateTime lastHeartbeat = DateTime.UtcNow.Add(timeOut.Negate());
+                string[] timeoutServers = servers.Where(s => s.Value.LastHeartbeat < lastHeartbeat)
+                                                 .Select(s => s.Key)
+                                                 .ToArray();
+                // remove all timeout server.
+                Array.ForEach(timeoutServers, server => Client.Delete($"servers/{server}"));
+
+                return timeoutServers.Length;
+            }
+            return default(int);
         }
 
         #endregion
@@ -226,7 +329,16 @@ namespace Hangfire.Firebase
 
         public override Dictionary<string, string> GetAllEntriesFromHash(string key)
         {
-            throw new NotImplementedException();
+            if (key == null) throw new ArgumentNullException(nameof(key));
+
+            FirebaseResponse response = Client.Get($"hash/{key}");
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                Dictionary<string, Hash> hashes = response.ResultAs<Dictionary<string, Hash>>();
+                return hashes.Select(h => h.Value).ToDictionary(h => h.Field, h => h.Value);
+            }
+
+            return null;
         }
 
         public override void SetRangeInHash(string key, IEnumerable<KeyValuePair<string, string>> keyValuePairs)
@@ -234,16 +346,40 @@ namespace Hangfire.Firebase
             if (key == null) throw new ArgumentNullException(nameof(key));
             if (keyValuePairs == null) throw new ArgumentNullException(nameof(keyValuePairs));
 
+            List<Task<FirebaseResponse>> tasks = new List<Task<FirebaseResponse>>();
             List<Hash> hashes = keyValuePairs.Select(k => new Hash
             {
                 Field = k.Key,
                 Value = k.Value
             }).ToList();
 
-            List<Task<PushResponse>> tasks = new List<Task<PushResponse>>();
+            FirebaseResponse response = Client.Get($"hash/{key}");
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                Dictionary<string, Hash> existingHashes = response.ResultAs<Dictionary<string, Hash>>();
+                string[] hashReferences = existingHashes.Select(h => h.Value).Where(h => hashes.Any(k => k.Field == h.Field))
+                                                                             .Select(h => h.Value)
+                                                                             .ToArray();
+                // updates 
+                Array.ForEach(hashReferences, hashReference =>
+                {
+                    Hash hash;
+                    if (existingHashes.TryGetValue(hashReference, out hash) && hashes.Any(k => k.Field == hash.Field))
+                    {
+                        string value = hashes.Where(k => k.Field == hash.Field).Select(k => k.Value).Single();
+                        Task<FirebaseResponse> task = Task.Run(() => (FirebaseResponse)Client.Set($"hash/{key}/{hashReferences}/value", value));
+                        tasks.Add(task);
+
+                        // remove the hash from the list
+                        hashes.RemoveAll(x => x.Field == hash.Field);
+                    }
+                });
+            }
+
+            // new 
             hashes.ForEach(hash =>
             {
-                Task<PushResponse> task = Task.Run(() => Client.Push($"hash/{key}", hash));
+                Task<FirebaseResponse> task = Task.Run(() => (FirebaseResponse)Client.Push($"hash/{key}", hash));
                 tasks.Add(task);
             });
             Task.WaitAll(tasks.ToArray());
