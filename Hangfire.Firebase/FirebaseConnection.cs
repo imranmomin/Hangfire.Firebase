@@ -33,10 +33,7 @@ namespace Hangfire.Firebase
             throw new NotImplementedException();
         }
 
-        public override IWriteOnlyTransaction CreateWriteTransaction()
-        {
-            throw new NotImplementedException();
-        }
+        public override IWriteOnlyTransaction CreateWriteTransaction() => new FirebaseWriteOnlyTransaction(this);
 
         #region Job
 
@@ -331,7 +328,7 @@ namespace Hangfire.Firebase
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            FirebaseResponse response = Client.Get($"hash/{key}");
+            FirebaseResponse response = Client.Get($"hashes/{key}");
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, Hash> hashes = response.ResultAs<Dictionary<string, Hash>>();
@@ -353,7 +350,7 @@ namespace Hangfire.Firebase
                 Value = k.Value
             }).ToList();
 
-            FirebaseResponse response = Client.Get($"hash/{key}");
+            FirebaseResponse response = Client.Get($"hashes/{key}");
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, Hash> existingHashes = response.ResultAs<Dictionary<string, Hash>>();
@@ -367,7 +364,7 @@ namespace Hangfire.Firebase
                     if (existingHashes.TryGetValue(hashReference, out hash) && hashes.Any(k => k.Field == hash.Field))
                     {
                         string value = hashes.Where(k => k.Field == hash.Field).Select(k => k.Value).Single();
-                        Task<FirebaseResponse> task = Task.Run(() => (FirebaseResponse)Client.Set($"hash/{key}/{hashReferences}/value", value));
+                        Task<FirebaseResponse> task = Task.Run(() => (FirebaseResponse)Client.Set($"hashes/{key}/{hashReferences}/value", value));
                         tasks.Add(task);
 
                         // remove the hash from the list
@@ -379,7 +376,7 @@ namespace Hangfire.Firebase
             // new 
             hashes.ForEach(hash =>
             {
-                Task<FirebaseResponse> task = Task.Run(() => (FirebaseResponse)Client.Push($"hash/{key}", hash));
+                Task<FirebaseResponse> task = Task.Run(() => (FirebaseResponse)Client.Push($"hashes/{key}", hash));
                 tasks.Add(task);
             });
             Task.WaitAll(tasks.ToArray());
@@ -397,7 +394,7 @@ namespace Hangfire.Firebase
             if (key == null) throw new ArgumentNullException(nameof(key));
 
             QueryBuilder builder = QueryBuilder.New().Shallow(true);
-            FirebaseResponse response = Client.Get($"hash/{key}", builder);
+            FirebaseResponse response = Client.Get($"hashes/{key}", builder);
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 string[] hashes = response.ResultAs<string[]>();
@@ -412,7 +409,7 @@ namespace Hangfire.Firebase
             if (key == null) throw new ArgumentNullException(nameof(key));
             if (name == null) throw new ArgumentNullException(nameof(name));
 
-            FirebaseResponse response = Client.Get($"hash/{key}");
+            FirebaseResponse response = Client.Get($"hashes/{key}");
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, Hash> hashes = response.ResultAs<Dictionary<string, Hash>>();
@@ -426,7 +423,7 @@ namespace Hangfire.Firebase
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            FirebaseResponse response = Client.Get($"hash/{key}");
+            FirebaseResponse response = Client.Get($"hashes/{key}");
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, Hash> hashes = response.ResultAs<Dictionary<string, Hash>>();
@@ -445,7 +442,7 @@ namespace Hangfire.Firebase
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            FirebaseResponse response = Client.Get($"list/{key}");
+            FirebaseResponse response = Client.Get($"lists/{key}");
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, List> lists = response.ResultAs<Dictionary<string, List>>();
@@ -459,7 +456,7 @@ namespace Hangfire.Firebase
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            FirebaseResponse response = Client.Get($"list/{key}");
+            FirebaseResponse response = Client.Get($"lists/{key}");
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, List> lists = response.ResultAs<Dictionary<string, List>>();
@@ -476,7 +473,7 @@ namespace Hangfire.Firebase
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            FirebaseResponse response = Client.Get($"list/{key}");
+            FirebaseResponse response = Client.Get($"lists/{key}");
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, List> lists = response.ResultAs<Dictionary<string, List>>();
@@ -492,7 +489,7 @@ namespace Hangfire.Firebase
             if (key == null) throw new ArgumentNullException(nameof(key));
 
             QueryBuilder builder = QueryBuilder.New().Shallow(true);
-            FirebaseResponse response = Client.Get($"list/{key}", builder);
+            FirebaseResponse response = Client.Get($"lists/{key}", builder);
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 string[] lists = response.ResultAs<string[]>();
