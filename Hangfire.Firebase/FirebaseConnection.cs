@@ -1,18 +1,18 @@
 ﻿using System;
-using System.Linq;
-using System.Threading;
-using System.Collections.Generic;
 using System.Net;
+using System.Linq;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
+using FireSharp;
 using Hangfire.Common;
 using Hangfire.Server;
 using Hangfire.Storage;
-using FireSharp;
+using FireSharp.Response;
 using FireSharp.Interfaces;
 using Hangfire.Firebase.Queue;
-using FireSharp.Response;
 using Hangfire.Firebase.Entities;
 
 namespace Hangfire.Firebase
@@ -28,11 +28,7 @@ namespace Hangfire.Firebase
             QueueProviders = queueProviders;
         }
 
-        public override IDisposable AcquireDistributedLock(string resource, TimeSpan timeout)
-        {
-            throw new NotImplementedException();
-        }
-
+        public override IDisposable AcquireDistributedLock(string resource, TimeSpan timeout) => new FirebaseDistributedLock(resource, timeout, Client);
         public override IWriteOnlyTransaction CreateWriteTransaction() => new FirebaseWriteOnlyTransaction(this);
 
         #region Job
