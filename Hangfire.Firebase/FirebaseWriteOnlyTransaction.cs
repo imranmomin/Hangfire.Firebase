@@ -32,6 +32,9 @@ namespace Hangfire.Firebase
 
         public void AddToQueue(string queue, string jobId)
         {
+            if (string.IsNullOrEmpty(queue)) throw new ArgumentNullException(nameof(queue));
+            if (string.IsNullOrEmpty(jobId)) throw new ArgumentNullException(nameof(jobId));
+
             IPersistentJobQueueProvider provider = connection.QueueProviders.GetProvider(queue);
             IPersistentJobQueue persistentQueue = provider.GetJobQueue();
             QueueCommand(() => persistentQueue.Enqueue(queue, jobId));
@@ -41,8 +44,10 @@ namespace Hangfire.Firebase
 
         #region Counter
 
-        public void DecrementCounter([NotNull] string key)
+        public void DecrementCounter(string key)
         {
+            if (string.IsNullOrEmpty(key)) throw new ArgumentNullException(nameof(key));
+
             QueueCommand(() =>
             {
                 Counter data = new Counter
@@ -60,6 +65,9 @@ namespace Hangfire.Firebase
 
         public void DecrementCounter(string key, TimeSpan expireIn)
         {
+            if (string.IsNullOrEmpty(key)) throw new ArgumentNullException(nameof(key));
+            if (expireIn.Duration() != expireIn) throw new ArgumentException("The `expireIn` value must be positive.", nameof(expireIn));
+
             QueueCommand(() =>
             {
                 Counter data = new Counter
@@ -78,6 +86,8 @@ namespace Hangfire.Firebase
 
         public void IncrementCounter(string key)
         {
+            if (string.IsNullOrEmpty(key)) throw new ArgumentNullException(nameof(key));
+
             QueueCommand(() =>
             {
                 Counter data = new Counter
@@ -95,6 +105,9 @@ namespace Hangfire.Firebase
 
         public void IncrementCounter(string key, TimeSpan expireIn)
         {
+            if (string.IsNullOrEmpty(key)) throw new ArgumentNullException(nameof(key));
+            if (expireIn.Duration() != expireIn) throw new ArgumentException("The `expireIn` value must be positive.", nameof(expireIn));
+
             QueueCommand(() =>
             {
                 Counter data = new Counter
@@ -117,6 +130,9 @@ namespace Hangfire.Firebase
 
         public void ExpireJob(string jobId, TimeSpan expireIn)
         {
+            if (string.IsNullOrEmpty(jobId)) throw new ArgumentNullException(nameof(jobId));
+            if (expireIn.Duration() != expireIn) throw new ArgumentException("The `expireIn` value must be positive.", nameof(expireIn));
+
             QueueCommand(() =>
             {
                 FirebaseResponse response = connection.Client.Set($"jobs/{jobId}/expire_on", DateTime.UtcNow.Add(expireIn));
@@ -127,9 +143,10 @@ namespace Hangfire.Firebase
             });
         }
 
-
         public void PersistJob(string jobId)
         {
+            if (string.IsNullOrEmpty(jobId)) throw new ArgumentNullException(nameof(jobId));
+
             QueueCommand(() =>
             {
                 FirebaseResponse response = connection.Client.Delete($"jobs/{jobId}/expire_on");
@@ -146,6 +163,9 @@ namespace Hangfire.Firebase
 
         public void SetJobState(string jobId, IState state)
         {
+            if (string.IsNullOrEmpty(jobId)) throw new ArgumentNullException(nameof(jobId));
+            if (state == null) throw new ArgumentNullException(nameof(state));
+
             QueueCommand(() =>
             {
                 State data = new State
@@ -172,6 +192,9 @@ namespace Hangfire.Firebase
 
         public void AddJobState(string jobId, IState state)
         {
+            if (string.IsNullOrEmpty(jobId)) throw new ArgumentNullException(nameof(jobId));
+            if (state == null) throw new ArgumentNullException(nameof(state));
+
             QueueCommand(() =>
             {
                 State data = new State
@@ -195,6 +218,9 @@ namespace Hangfire.Firebase
 
         public void RemoveFromSet(string key, string value)
         {
+            if (string.IsNullOrEmpty(key)) throw new ArgumentNullException(nameof(key));
+            if (string.IsNullOrEmpty(value)) throw new ArgumentNullException(nameof(value));
+
             QueueCommand(() =>
             {
                 FirebaseResponse response = connection.Client.Get($"sets");
@@ -219,6 +245,9 @@ namespace Hangfire.Firebase
 
         public void AddToSet(string key, string value, double score)
         {
+            if (string.IsNullOrEmpty(key)) throw new ArgumentNullException(nameof(key));
+            if (string.IsNullOrEmpty(value)) throw new ArgumentNullException(nameof(value));
+
             QueueCommand(() =>
             {
                 Set data = new Set
@@ -243,6 +272,8 @@ namespace Hangfire.Firebase
 
         public void RemoveHash(string key)
         {
+            if (string.IsNullOrEmpty(key)) throw new ArgumentNullException(nameof(key));
+
             QueueCommand(() =>
             {
                 FirebaseResponse response = connection.Client.Delete($"hashes/{key}");
@@ -253,9 +284,11 @@ namespace Hangfire.Firebase
             });
         }
 
-
         public void SetRangeInHash(string key, IEnumerable<KeyValuePair<string, string>> keyValuePairs)
         {
+            if (string.IsNullOrEmpty(key)) throw new ArgumentNullException(nameof(key));
+            if (keyValuePairs == null) throw new ArgumentNullException(nameof(keyValuePairs));
+
             QueueCommand(() =>
             {
                 if (key == null) throw new ArgumentNullException(nameof(key));
@@ -314,6 +347,9 @@ namespace Hangfire.Firebase
 
         public void InsertToList(string key, string value)
         {
+            if (string.IsNullOrEmpty(key)) throw new ArgumentNullException(nameof(key));
+            if (string.IsNullOrEmpty(value)) throw new ArgumentNullException(nameof(value));
+
             QueueCommand(() =>
             {
                 List data = new List
@@ -329,9 +365,11 @@ namespace Hangfire.Firebase
             });
         }
 
-
         public void RemoveFromList(string key, string value)
         {
+            if (string.IsNullOrEmpty(key)) throw new ArgumentNullException(nameof(key));
+            if (string.IsNullOrEmpty(value)) throw new ArgumentNullException(nameof(value));
+
             QueueCommand(() =>
             {
                 FirebaseResponse response = connection.Client.Get($"lists/{key}");
@@ -351,9 +389,10 @@ namespace Hangfire.Firebase
             });
         }
 
-
         public void TrimList(string key, int keepStartingFrom, int keepEndingAt)
         {
+            if (string.IsNullOrEmpty(key)) throw new ArgumentNullException(nameof(key));
+
             QueueCommand(() =>
             {
                 if (key == null) throw new ArgumentNullException(nameof(key));
