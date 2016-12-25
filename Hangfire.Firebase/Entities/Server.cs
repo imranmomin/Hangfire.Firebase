@@ -1,9 +1,11 @@
 ﻿using System;
+using Newtonsoft.Json;
 
 namespace Hangfire.Firebase.Entities
 {
-    internal class Server
+    internal class Server : FireEntity
     {
+        [JsonProperty("_id")]
         public string Id { get; set; }
         public int Workers { get; set; }
         public string[] Queues { get; set; }

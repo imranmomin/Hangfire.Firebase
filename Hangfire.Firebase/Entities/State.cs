@@ -1,13 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Hangfire.States;
 
 namespace Hangfire.Firebase.Entities
 {
-    internal class State
+    internal class State : FireEntity
     {
         public string Name { get; set; }
         public string Reason { get; set; }

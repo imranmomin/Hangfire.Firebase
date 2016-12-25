@@ -3,7 +3,7 @@ using Hangfire.Storage;
 
 namespace Hangfire.Firebase.Entities
 {
-    internal class Job
+    internal class Job : FireEntity
     {
         public InvocationData InvocationData { get; set; }
         public string Arguments { get; set; }

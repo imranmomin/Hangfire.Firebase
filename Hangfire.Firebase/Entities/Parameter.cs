@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Hangfire.Firebase.Entities
+﻿namespace Hangfire.Firebase.Entities
 {
-    internal class Parameter
+    internal class Parameter : FireEntity
     {
         public string Name { get; set; }
         public string Value { get; set; }
