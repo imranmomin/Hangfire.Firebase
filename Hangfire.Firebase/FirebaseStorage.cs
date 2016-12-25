@@ -5,6 +5,7 @@ using FireSharp.Interfaces;
 using Hangfire.Storage;
 using Hangfire.Logging;
 using Hangfire.Firebase.Queue;
+using Newtonsoft.Json;
 
 namespace Hangfire.Firebase
 {
@@ -24,20 +25,12 @@ namespace Hangfire.Firebase
             {
                 AuthSecret = authSecret,
                 BasePath = url,
-                RequestTimeout = options.RequestTimeout
+                RequestTimeout = options.RequestTimeout,
+                Serializer = new Json.JsonSerializer()
             };
 
             this.url = url;
             Options = options;
-
-            // prepare the schema
-            if (options.PrepareSchema)
-            {
-                using (FirebaseClient client = new FirebaseClient(config))
-                {
-
-                }
-            }
         }
 
         public override IStorageConnection GetConnection() => new FirebaseConnection(config, QueueProviders);
