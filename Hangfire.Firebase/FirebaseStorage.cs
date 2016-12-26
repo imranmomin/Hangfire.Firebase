@@ -1,11 +1,13 @@
-﻿using FireSharp;
+﻿using System;
+using System.Collections.Generic;
+
 using FireSharp.Config;
 using FireSharp.Interfaces;
 
+using Hangfire.Server;
 using Hangfire.Storage;
 using Hangfire.Logging;
 using Hangfire.Firebase.Queue;
-using Newtonsoft.Json;
 
 namespace Hangfire.Firebase
 {
@@ -36,6 +38,13 @@ namespace Hangfire.Firebase
         public override IStorageConnection GetConnection() => new FirebaseConnection(config, QueueProviders);
 
         public override IMonitoringApi GetMonitoringApi() => new FirebaseMonitoringApi();
+
+#pragma warning disable 618
+        public override IEnumerable<IServerComponent> GetComponents()
+#pragma warning restore 618
+        {
+            yield return new ExpirationManager(this, TimeSpan.FromMinutes(5));
+        }
 
         public override void WriteOptionsToLog(ILog logger)
         {
