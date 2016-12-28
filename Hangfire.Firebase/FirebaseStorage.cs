@@ -33,6 +33,9 @@ namespace Hangfire.Firebase
 
             this.url = url;
             Options = options;
+
+            JobQueueProvider provider = new JobQueueProvider(this);
+            QueueProviders = new PersistentJobQueueProviderCollection(provider);
         }
 
         public override IStorageConnection GetConnection() => new FirebaseConnection(config, QueueProviders);
