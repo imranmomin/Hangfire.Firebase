@@ -33,7 +33,7 @@ namespace Hangfire.Firebase
                 if (response.StatusCode == System.Net.HttpStatusCode.OK)
                 {
                     Dictionary<string, Lock> locks = response.ResultAs<Dictionary<string, Lock>>();
-                    string reference = locks.Where(l => l.Value.Resource == resource).Select(l => l.Key).FirstOrDefault();
+                    string reference = locks?.Where(l => l.Value.Resource == resource).Select(l => l.Key).FirstOrDefault();
                     if (string.IsNullOrEmpty(reference))
                     {
                         response = client.Push($"locks", new Lock { Resource = resource });

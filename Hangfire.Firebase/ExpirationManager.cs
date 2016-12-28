@@ -42,15 +42,17 @@ namespace Hangfire.Firebase
                     if (respone.StatusCode == System.Net.HttpStatusCode.OK)
                     {
                         Dictionary<string, IExpireEntity> collection = respone.ResultAs<Dictionary<string, IExpireEntity>>();
-                        string[] references = collection.Where(c => c.Value.ExpireOn.HasValue && c.Value.ExpireOn < DateTime.UtcNow).Select(c => c.Key).ToArray();
-
-                        List<Task<FirebaseResponse>> tasks = new List<Task<FirebaseResponse>>();
-                        Array.ForEach(references, reference =>
+                        string[] references = collection?.Where(c => c.Value.ExpireOn.HasValue && c.Value.ExpireOn < DateTime.UtcNow).Select(c => c.Key).ToArray();
+                        if (references != null && references.Length > 0)
                         {
-                            Task<FirebaseResponse> task = Task.Run(() => connection.Client.Delete($"{document}/{reference}"));
-                            tasks.Add(task);
-                        });
-                        Task.WaitAll(tasks.ToArray());
+                            List<Task<FirebaseResponse>> tasks = new List<Task<FirebaseResponse>>();
+                            Array.ForEach(references, reference =>
+                            {
+                                Task<FirebaseResponse> task = Task.Run(() => connection.Client.Delete($"{document}/{reference}"));
+                                tasks.Add(task);
+                            });
+                            Task.WaitAll(tasks.ToArray());
+                        }
                     }
                 }
 

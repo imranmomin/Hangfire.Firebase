@@ -12,6 +12,7 @@ using Hangfire.Server;
 using Hangfire.Storage;
 using FireSharp.Response;
 using FireSharp.Interfaces;
+using Hangfire.Firebase.Json;
 using Hangfire.Firebase.Queue;
 using Hangfire.Firebase.Entities;
 
@@ -26,6 +27,7 @@ namespace Hangfire.Firebase
         {
             Client = new FirebaseClient(config);
             QueueProviders = queueProviders;
+            FireSharp.Extensions.ObjectExtensions.Serializer = new JsonSerializer();
         }
 
         public override IDisposable AcquireDistributedLock(string resource, TimeSpan timeout) => new FirebaseDistributedLock(resource, timeout, Client);
@@ -222,7 +224,7 @@ namespace Hangfire.Firebase
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, Entities.Server> servers = response.ResultAs<Dictionary<string, Entities.Server>>();
-                string serverReferenceKey = servers.Where(s => s.Value.Id == serverId).Select(s => s.Key).FirstOrDefault();
+                string serverReferenceKey = servers?.Where(s => s.Value.Id == serverId).Select(s => s.Key).FirstOrDefault();
                 Entities.Server server;
 
                 if (!string.IsNullOrEmpty(serverReferenceKey) && servers.TryGetValue(serverReferenceKey, out server))
