@@ -44,6 +44,7 @@ namespace Hangfire.Firebase
 #pragma warning restore 618
         {
             yield return new ExpirationManager(this, TimeSpan.FromMinutes(5));
+            yield return new CountersAggregator(this, TimeSpan.FromMinutes(5));
         }
 
         public override void WriteOptionsToLog(ILog logger)

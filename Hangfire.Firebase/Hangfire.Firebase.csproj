@@ -81,6 +81,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CountersAggregator.cs" />
     <Compile Include="Entities\Counter.cs" />
     <Compile Include="Entities\FireEntity.cs" />
     <Compile Include="Entities\Hash.cs" />
