@@ -5,7 +5,7 @@ namespace Hangfire.Firebase.Entities
 {
     internal class FireEntity
     {
-        [JsonProperty(".prority")]
-        private long Prority { get; set; } = DateTime.UtcNow.Ticks;
+        [JsonProperty(".priority")]
+        private long Priority { get; set; } = DateTime.UtcNow.Ticks;
     }
 }
