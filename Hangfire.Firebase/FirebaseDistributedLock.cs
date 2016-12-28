@@ -70,7 +70,7 @@ namespace Hangfire.Firebase
                 {
                     Dictionary<string, Lock> locks = response.ResultAs<Dictionary<string, Lock>>();
                     Lock @lock;
-                    if (locks.TryGetValue(lockReference, out @lock))
+                    if (locks != null && locks.TryGetValue(lockReference, out @lock))
                     {
                         response = client.Delete($"locks/{lockReference}");
                     }

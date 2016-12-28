@@ -147,7 +147,7 @@ namespace Hangfire.Firebase
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, Parameter> parameters = response.ResultAs<Dictionary<string, Parameter>>();
-                return parameters.Select(p => p.Value).Where(p => p.Name == name).Select(p => p.Value).FirstOrDefault();
+                return parameters?.Select(p => p.Value).Where(p => p.Name == name).Select(p => p.Value).FirstOrDefault();
             }
 
             return null;
@@ -163,7 +163,7 @@ namespace Hangfire.Firebase
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, Parameter> parameters = response.ResultAs<Dictionary<string, Parameter>>();
-                string parameterReference = parameters.Where(p => p.Value.Name == name).Select(p => p.Key).FirstOrDefault();
+                string parameterReference = parameters?.Where(p => p.Value.Name == name).Select(p => p.Key).FirstOrDefault();
                 if (!string.IsNullOrEmpty(parameterReference))
                 {
                     isExsits = true;
@@ -266,8 +266,9 @@ namespace Hangfire.Firebase
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, Entities.Server> servers = response.ResultAs<Dictionary<string, Entities.Server>>();
-                string serverReferenceKey = servers.Where(s => s.Value.Id == serverId).Select(s => s.Key).FirstOrDefault();
+                string serverReferenceKey = servers?.Where(s => s.Value.Id == serverId).Select(s => s.Key).FirstOrDefault();
                 Entities.Server server;
+
                 if (!string.IsNullOrEmpty(serverReferenceKey) && servers.TryGetValue(serverReferenceKey, out server))
                 {
                     server.LastHeartbeat = DateTime.UtcNow;
@@ -288,8 +289,11 @@ namespace Hangfire.Firebase
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, Entities.Server> servers = response.ResultAs<Dictionary<string, Entities.Server>>();
-                string server = servers.Where(s => s.Value.Id == serverId).Select(s => s.Key).Single();
-                Client.Delete($"servers/{server}");
+                string serverReference = servers?.Where(s => s.Value.Id == serverId).Select(s => s.Key).Single();
+                if (!string.IsNullOrEmpty(serverReference))
+                {
+                    Client.Delete($"servers/{serverReference}");
+                }
             }
         }
 
@@ -307,13 +311,16 @@ namespace Hangfire.Firebase
 
                 // get the firebase reference key for each timeout server
                 DateTime lastHeartbeat = DateTime.UtcNow.Add(timeOut.Negate());
-                string[] timeoutServers = servers.Where(s => s.Value.LastHeartbeat < lastHeartbeat)
-                                                 .Select(s => s.Key)
-                                                 .ToArray();
-                // remove all timeout server.
-                Array.ForEach(timeoutServers, server => Client.Delete($"servers/{server}"));
-
-                return timeoutServers.Length;
+                string[] timeoutServers = servers?.Where(s => s.Value.LastHeartbeat < lastHeartbeat)
+                                                  .Select(s => s.Key)
+                                                  .ToArray();
+                if (timeoutServers != null)
+                {
+                    // remove all timeout server.
+                    Array.ForEach(timeoutServers, server => Client.Delete($"servers/{server}"));
+                    return timeoutServers.Length;
+                }
+                return default(int);
             }
             return default(int);
         }
@@ -330,7 +337,7 @@ namespace Hangfire.Firebase
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, Hash> hashes = response.ResultAs<Dictionary<string, Hash>>();
-                return hashes.Select(h => h.Value).ToDictionary(h => h.Field, h => h.Value);
+                return hashes?.Select(h => h.Value).ToDictionary(h => h.Field, h => h.Value);
             }
 
             return null;
@@ -352,23 +359,26 @@ namespace Hangfire.Firebase
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, Hash> existingHashes = response.ResultAs<Dictionary<string, Hash>>();
-                string[] hashReferences = existingHashes.Select(h => h.Value).Where(h => hashes.Any(k => k.Field == h.Field))
-                                                                             .Select(h => h.Value)
-                                                                             .ToArray();
-                // updates 
-                Array.ForEach(hashReferences, hashReference =>
+                string[] hashReferences = existingHashes?.Select(h => h.Value).Where(h => hashes.Any(k => k.Field == h.Field))
+                                                                              .Select(h => h.Value)
+                                                                              .ToArray();
+                if (hashReferences != null)
                 {
-                    Hash hash;
-                    if (existingHashes.TryGetValue(hashReference, out hash) && hashes.Any(k => k.Field == hash.Field))
+                    // updates 
+                    Array.ForEach(hashReferences, hashReference =>
                     {
-                        string value = hashes.Where(k => k.Field == hash.Field).Select(k => k.Value).Single();
-                        Task<FirebaseResponse> task = Task.Run(() => (FirebaseResponse)Client.Set($"hashes/{key}/{hashReferences}/value", value));
-                        tasks.Add(task);
+                        Hash hash;
+                        if (existingHashes.TryGetValue(hashReference, out hash) && hashes.Any(k => k.Field == hash.Field))
+                        {
+                            string value = hashes.Where(k => k.Field == hash.Field).Select(k => k.Value).Single();
+                            Task<FirebaseResponse> task = Task.Run(() => (FirebaseResponse)Client.Set($"hashes/{key}/{hashReferences}/value", value));
+                            tasks.Add(task);
 
-                        // remove the hash from the list
-                        hashes.RemoveAll(x => x.Field == hash.Field);
-                    }
-                });
+                            // remove the hash from the list
+                            hashes.RemoveAll(x => x.Field == hash.Field);
+                        }
+                    });
+                }
             }
 
             // new 
@@ -377,13 +387,17 @@ namespace Hangfire.Firebase
                 Task<FirebaseResponse> task = Task.Run(() => (FirebaseResponse)Client.Push($"hashes/{key}", hash));
                 tasks.Add(task);
             });
-            Task.WaitAll(tasks.ToArray());
 
-            bool isFailed = tasks.Any(t => t.Result.StatusCode != HttpStatusCode.OK);
-            if (isFailed)
+            if (tasks.Count > 0)
             {
-                string body = string.Join("; ", tasks.Where(t => t.Result.StatusCode != HttpStatusCode.OK).Select(t => t.Result.Body));
-                throw new HttpRequestException(body);
+                Task.WaitAll(tasks.ToArray());
+
+                bool isFailed = tasks.Any(t => t.Result.StatusCode != HttpStatusCode.OK);
+                if (isFailed)
+                {
+                    string body = string.Join("; ", tasks.Where(t => t.Result.StatusCode != HttpStatusCode.OK).Select(t => t.Result.Body));
+                    throw new HttpRequestException(body);
+                }
             }
         }
 
@@ -411,7 +425,7 @@ namespace Hangfire.Firebase
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, Hash> hashes = response.ResultAs<Dictionary<string, Hash>>();
-                return hashes.Select(h => h.Value).Where(h => h.Field == name).Select(v => v.Value).FirstOrDefault();
+                return hashes?.Select(h => h.Value).Where(h => h.Field == name).Select(v => v.Value).FirstOrDefault();
             }
 
             return null;
@@ -425,7 +439,7 @@ namespace Hangfire.Firebase
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, Hash> hashes = response.ResultAs<Dictionary<string, Hash>>();
-                DateTime? expireOn = hashes.Select(h => h.Value).Min(h => h.ExpireOn);
+                DateTime? expireOn = hashes?.Select(h => h.Value).Min(h => h.ExpireOn);
                 if (expireOn.HasValue) return expireOn.Value - DateTime.UtcNow;
             }
 
@@ -444,7 +458,10 @@ namespace Hangfire.Firebase
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, List> lists = response.ResultAs<Dictionary<string, List>>();
-                return lists.Select(l => l.Value).Select(l => l.Value).ToList();
+                if (lists != null)
+                {
+                    return lists.Select(l => l.Value).Select(l => l.Value).ToList();
+                }
             }
 
             return new List<string>();
@@ -458,10 +475,13 @@ namespace Hangfire.Firebase
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, List> lists = response.ResultAs<Dictionary<string, List>>();
-                return lists.Select(l => l.Value)
-                            .OrderBy(l => l.ExpireOn)
-                            .Skip(startingFrom).Take(endingAt)
-                            .Select(l => l.Value).ToList();
+                if (lists != null)
+                {
+                    return lists?.Select(l => l.Value)
+                                 .OrderBy(l => l.ExpireOn)
+                                 .Skip(startingFrom).Take(endingAt)
+                                 .Select(l => l.Value).ToList();
+                }
             }
 
             return new List<string>();
@@ -475,7 +495,7 @@ namespace Hangfire.Firebase
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, List> lists = response.ResultAs<Dictionary<string, List>>();
-                DateTime? expireOn = lists.Select(l => l.Value).Min(l => l.ExpireOn);
+                DateTime? expireOn = lists?.Select(l => l.Value).Min(l => l.ExpireOn);
                 if (expireOn.HasValue) return expireOn.Value - DateTime.UtcNow;
             }
 
@@ -491,7 +511,10 @@ namespace Hangfire.Firebase
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 string[] lists = response.ResultAs<string[]>();
-                return lists.LongCount();
+                if (lists != null)
+                {
+                    return lists.LongCount();
+                }
             }
 
             return default(long);

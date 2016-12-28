@@ -225,7 +225,7 @@ namespace Hangfire.Firebase
                 if (response.StatusCode == HttpStatusCode.OK)
                 {
                     Dictionary<string, Set> sets = response.ResultAs<Dictionary<string, Set>>();
-                    string setReference = sets.Where(s => s.Value.Key == key && s.Value.Value == value).Select(s => s.Key).FirstOrDefault();
+                    string setReference = sets?.Where(s => s.Value.Key == key && s.Value.Value == value).Select(s => s.Key).FirstOrDefault();
                     if (string.IsNullOrEmpty(setReference))
                     {
                         response = connection.Client.Delete($"sets/{setReference}");
@@ -303,23 +303,26 @@ namespace Hangfire.Firebase
                 if (response.StatusCode == HttpStatusCode.OK)
                 {
                     Dictionary<string, Hash> existingHashes = response.ResultAs<Dictionary<string, Hash>>();
-                    string[] hashReferences = existingHashes.Select(h => h.Value).Where(h => hashes.Any(k => k.Field == h.Field))
+                    string[] hashReferences = existingHashes?.Select(h => h.Value).Where(h => hashes.Any(k => k.Field == h.Field))
                                                                                  .Select(h => h.Value)
                                                                                  .ToArray();
-                    // updates 
-                    Array.ForEach(hashReferences, hashReference =>
+                    if (hashReferences != null)
                     {
-                        Hash hash;
-                        if (existingHashes.TryGetValue(hashReference, out hash) && hashes.Any(k => k.Field == hash.Field))
+                        // updates 
+                        Array.ForEach(hashReferences, hashReference =>
                         {
-                            string value = hashes.Where(k => k.Field == hash.Field).Select(k => k.Value).Single();
-                            Task<FirebaseResponse> task = Task.Run(() => (FirebaseResponse)connection.Client.Set($"hashes/{key}/{hashReferences}/value", value));
-                            tasks.Add(task);
+                            Hash hash;
+                            if (existingHashes.TryGetValue(hashReference, out hash) && hashes.Any(k => k.Field == hash.Field))
+                            {
+                                string value = hashes.Where(k => k.Field == hash.Field).Select(k => k.Value).Single();
+                                Task<FirebaseResponse> task = Task.Run(() => (FirebaseResponse)connection.Client.Set($"hashes/{key}/{hashReferences}/value", value));
+                                tasks.Add(task);
 
-                            // remove the hash from the list
-                            hashes.RemoveAll(x => x.Field == hash.Field);
-                        }
-                    });
+                                // remove the hash from the list
+                                hashes.RemoveAll(x => x.Field == hash.Field);
+                            }
+                        });
+                    }
                 }
 
                 // new 
@@ -374,7 +377,7 @@ namespace Hangfire.Firebase
                 if (response.StatusCode == HttpStatusCode.OK)
                 {
                     Dictionary<string, List> lists = response.ResultAs<Dictionary<string, List>>();
-                    string valueReference = lists.Where(l => l.Value.Value == value).Select(k => k.Key).FirstOrDefault();
+                    string valueReference = lists?.Where(l => l.Value.Value == value).Select(k => k.Key).FirstOrDefault();
                     if (string.IsNullOrEmpty(valueReference))
                     {
                         response = connection.Client.Delete($"lists/{key}/{valueReference}");
@@ -395,26 +398,29 @@ namespace Hangfire.Firebase
             {
                 if (key == null) throw new ArgumentNullException(nameof(key));
 
-                List<Task<FirebaseResponse>> tasks = new List<Task<FirebaseResponse>>();
+
                 FirebaseResponse response = connection.Client.Get($"lists/{key}");
                 if (response.StatusCode == HttpStatusCode.OK)
                 {
                     Dictionary<string, List> lists = response.ResultAs<Dictionary<string, List>>();
-                    string[] listsReferences = lists.Skip(keepStartingFrom).Take(keepEndingAt).Select(l => l.Key).ToArray();
+                    string[] listsReferences = lists?.Skip(keepStartingFrom).Take(keepEndingAt).Select(l => l.Key).ToArray();
 
-                    // delete
-                    Array.ForEach(listsReferences, listReference =>
+                    if (listsReferences != null)
                     {
-                        Task<FirebaseResponse> task = Task.Run(() => connection.Client.Delete($"lists/{key}/{listReference}/value"));
-                        tasks.Add(task);
-                    });
-                    Task.WaitAll(tasks.ToArray());
+                        List<Task<FirebaseResponse>> tasks = new List<Task<FirebaseResponse>>();
+                        Array.ForEach(listsReferences, listReference =>
+                        {
+                            Task<FirebaseResponse> task = Task.Run(() => connection.Client.Delete($"lists/{key}/{listReference}/value"));
+                            tasks.Add(task);
+                        });
+                        Task.WaitAll(tasks.ToArray());
 
-                    bool isFailed = tasks.Any(t => t.Result.StatusCode != HttpStatusCode.OK);
-                    if (isFailed)
-                    {
-                        string body = string.Join("; ", tasks.Where(t => t.Result.StatusCode != HttpStatusCode.OK).Select(t => t.Result.Body));
-                        throw new HttpRequestException(body);
+                        bool isFailed = tasks.Any(t => t.Result.StatusCode != HttpStatusCode.OK);
+                        if (isFailed)
+                        {
+                            string body = string.Join("; ", tasks.Where(t => t.Result.StatusCode != HttpStatusCode.OK).Select(t => t.Result.Body));
+                            throw new HttpRequestException(body);
+                        }
                     }
                 }
             });
