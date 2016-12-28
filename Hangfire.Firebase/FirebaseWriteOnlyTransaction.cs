@@ -3,10 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Text;
 using System.Threading.Tasks;
 using FireSharp.Response;
-using Hangfire.Annotations;
 using Hangfire.Firebase.Entities;
 using Hangfire.Firebase.Queue;
 using Hangfire.States;
@@ -55,7 +53,7 @@ namespace Hangfire.Firebase
                     Value = -1
                 };
 
-                FirebaseResponse response = connection.Client.Push($"counters/{key}", data);
+                FirebaseResponse response = connection.Client.Push($"counters/raw/{key}", data);
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
                     throw new HttpRequestException(response.Body);
@@ -76,7 +74,7 @@ namespace Hangfire.Firebase
                     ExpireOn = DateTime.UtcNow.Add(expireIn)
                 };
 
-                FirebaseResponse response = connection.Client.Push($"counters/{key}", data);
+                FirebaseResponse response = connection.Client.Push($"counters/raw{key}", data);
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
                     throw new HttpRequestException(response.Body);
@@ -95,7 +93,7 @@ namespace Hangfire.Firebase
                     Value = +1
                 };
 
-                FirebaseResponse response = connection.Client.Push($"counters/{key}", data);
+                FirebaseResponse response = connection.Client.Push($"counters/raw{key}", data);
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
                     throw new HttpRequestException(response.Body);
@@ -116,7 +114,7 @@ namespace Hangfire.Firebase
                     ExpireOn = DateTime.UtcNow.Add(expireIn)
                 };
 
-                FirebaseResponse response = connection.Client.Push($"counters/{key}", data);
+                FirebaseResponse response = connection.Client.Push($"counters/raw{key}", data);
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
                     throw new HttpRequestException(response.Body);
