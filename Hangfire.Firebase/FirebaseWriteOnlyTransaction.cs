@@ -166,25 +166,35 @@ namespace Hangfire.Firebase
 
             QueueCommand(() =>
             {
-                State data = new State
-                {
-                    Name = state.Name,
-                    Reason = state.Reason,
-                    CreatedOn = DateTime.UtcNow,
-                    Data = state.SerializeData()
-                };
-                FirebaseResponse response = connection.Client.Push($"states/{jobId}", data);
+                FirebaseResponse response = connection.Client.Get($"jobs/{jobId}");
                 if (response.StatusCode == HttpStatusCode.OK)
                 {
-                    string stateReference = ((PushResponse)response).Result.name;
-                    response = connection.Client.Set($"jobs/{jobId}", new { StateName = state.Name, StateId = stateReference });
-                    if (response.StatusCode == HttpStatusCode.OK)
+                    Job job = response.ResultAs<Job>();
+                    if (job != null)
                     {
-                        return;
+                        State data = new State
+                        {
+                            Name = state.Name,
+                            Reason = state.Reason,
+                            CreatedOn = DateTime.UtcNow,
+                            Data = state.SerializeData()
+                        };
+
+                        response = connection.Client.Push($"states/{jobId}", data);
+                        if (response.StatusCode == HttpStatusCode.OK)
+                        {
+                            string stateReference = ((PushResponse)response).Result.name;
+                            job.StateId = stateReference;
+                            job.StateName = state.Name;
+
+                            response = connection.Client.Set($"jobs/{jobId}", job);
+                            if (response.StatusCode == HttpStatusCode.OK)
+                            {
+                                return;
+                            }
+                        }
                     }
                 }
-
-                throw new HttpRequestException(response.Body);
             });
         }
 
