@@ -74,7 +74,7 @@ namespace Hangfire.Firebase
                     ExpireOn = DateTime.UtcNow.Add(expireIn)
                 };
 
-                FirebaseResponse response = connection.Client.Push($"counters/raw{key}", data);
+                FirebaseResponse response = connection.Client.Push($"counters/raw/{key}", data);
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
                     throw new HttpRequestException(response.Body);
@@ -93,7 +93,7 @@ namespace Hangfire.Firebase
                     Value = +1
                 };
 
-                FirebaseResponse response = connection.Client.Push($"counters/raw{key}", data);
+                FirebaseResponse response = connection.Client.Push($"counters/raw/{key}", data);
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
                     throw new HttpRequestException(response.Body);
@@ -114,7 +114,7 @@ namespace Hangfire.Firebase
                     ExpireOn = DateTime.UtcNow.Add(expireIn)
                 };
 
-                FirebaseResponse response = connection.Client.Push($"counters/raw{key}", data);
+                FirebaseResponse response = connection.Client.Push($"counters/raw/{key}", data);
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
                     throw new HttpRequestException(response.Body);

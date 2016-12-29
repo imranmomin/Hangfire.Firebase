@@ -18,7 +18,7 @@ namespace Hangfire.Firebase
         private static readonly ILog Logger = LogProvider.For<ExpirationManager>();
         private const string distributedLockKey = "expirationmanager";
         private static readonly TimeSpan defaultLockTimeout = TimeSpan.FromMinutes(5);
-        private static readonly string[] documents = new[] { "counters/aggregrated", "jobs", "lists", "sets", "hashs" };
+        private static readonly string[] documents = new[] { "locks", "jobs", "lists", "sets", "hashs", "counters/aggregrated" };
         private readonly FirebaseConnection connection;
         private readonly TimeSpan checkInterval;
 
@@ -41,7 +41,7 @@ namespace Hangfire.Firebase
                     FirebaseResponse respone = connection.Client.Get($"{document}");
                     if (respone.StatusCode == System.Net.HttpStatusCode.OK)
                     {
-                        Dictionary<string, IExpireEntity> collection = respone.ResultAs<Dictionary<string, IExpireEntity>>();
+                        Dictionary<string, FireEntity> collection = respone.ResultAs<Dictionary<string, FireEntity>>();
                         string[] references = collection?.Where(c => c.Value.ExpireOn.HasValue && c.Value.ExpireOn < DateTime.UtcNow).Select(c => c.Key).ToArray();
                         if (references != null && references.Length > 0)
                         {

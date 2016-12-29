@@ -85,8 +85,6 @@ namespace Hangfire.Firebase
                                 return true;
                             });
                             tasks.Add(task);
-
-                            cancellationToken.WaitHandle.WaitOne(checkInterval);
                         });
 
                         if (tasks.Count > 0)
@@ -95,6 +93,7 @@ namespace Hangfire.Firebase
                         }
                     }
                 }
+                cancellationToken.WaitHandle.WaitOne(checkInterval);
             }
 
             Logger.Trace("Records from the 'Counter' table aggregated.");

@@ -95,8 +95,8 @@ namespace Hangfire.Firebase
             }
 
             IPersistentJobQueue persistentQueue = providers.Single().GetJobQueue();
-            Task<IFetchedJob> queue = persistentQueue.Dequeue(queues, cancellationToken);
-            return queue.Result;
+            IFetchedJob queue = persistentQueue.Dequeue(queues, cancellationToken);
+            return queue;
         }
 
         public override JobData GetJobData(string jobId)

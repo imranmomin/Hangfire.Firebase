@@ -36,7 +36,7 @@ namespace Hangfire.Firebase
                     string reference = locks?.Where(l => l.Value.Resource == resource).Select(l => l.Key).FirstOrDefault();
                     if (string.IsNullOrEmpty(reference))
                     {
-                        response = client.Push($"locks", new Lock { Resource = resource });
+                        response = client.Push($"locks", new Lock { Resource = resource, ExpireOn = DateTime.UtcNow.Add(timeout) });
                         if (response.StatusCode == System.Net.HttpStatusCode.OK)
                         {
                             string lockReference = ((PushResponse)response).Result.name;
