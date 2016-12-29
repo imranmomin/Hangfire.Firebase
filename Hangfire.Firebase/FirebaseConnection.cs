@@ -134,6 +134,36 @@ namespace Hangfire.Firebase
             return null;
         }
 
+        public override StateData GetStateData(string jobId)
+        {
+            if (jobId == null) throw new ArgumentNullException(nameof(jobId));
+
+            FirebaseResponse response = Client.Get($"jobs/{jobId}");
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                Entities.Job job = response.ResultAs<Entities.Job>();
+                if (job != null)
+                {
+                    response = Client.Get($"states/{jobId}/{job.StateId}");
+                    if (response.StatusCode == HttpStatusCode.OK)
+                    {
+                        State data = response.ResultAs<State>();
+                        if (data != null)
+                        {
+                            return new StateData
+                            {
+                                Name = data.Name,
+                                Reason = data.Reason,
+                                Data = data.Data
+                            };
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
+
         #endregion
 
         #region Parameter
@@ -198,17 +228,39 @@ namespace Hangfire.Firebase
 
         public override HashSet<string> GetAllItemsFromSet(string key)
         {
-            throw new NotImplementedException();
+            if (key == null) throw new ArgumentNullException(nameof(key));
+
+            FirebaseResponse response = Client.Get($"sets");
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                Dictionary<string, Set> sets = response.ResultAs<Dictionary<string, Set>>();
+                List<string> data = sets?.Where(s => s.Value.Key == key).Select(s => s.Value.Value).ToList();
+                if (data != null)
+                {
+                    return new HashSet<string>(data);
+                }
+            }
+
+            return null;
         }
 
         public override string GetFirstByLowestScoreFromSet(string key, double fromScore, double toScore)
         {
-            throw new NotImplementedException();
-        }
+            if (key == null) throw new ArgumentNullException(nameof(key));
+            if (toScore < fromScore) throw new ArgumentException("The `toScore` value must be higher or equal to the `fromScore` value.");
 
-        public override StateData GetStateData(string jobId)
-        {
-            throw new NotImplementedException();
+            FirebaseResponse response = Client.Get($"sets");
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                Dictionary<string, Set> sets = response.ResultAs<Dictionary<string, Set>>();
+                return sets?.Where(s => s.Value.Key == key && s.Value.Score >= fromScore && s.Value.Score <= toScore)
+                            .Select(s => s.Value)
+                            .OrderBy(s => s.Score)
+                            .Take(1)
+                            .Select(s => s.Value).FirstOrDefault();
+            }
+
+            return null;
         }
 
         #endregion
