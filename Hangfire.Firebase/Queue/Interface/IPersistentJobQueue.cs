@@ -6,7 +6,7 @@ namespace Hangfire.Firebase.Queue
 {
     public interface IPersistentJobQueue
     {
-        Task<IFetchedJob> Dequeue(string[] queues, CancellationToken cancellationToken);
+        IFetchedJob Dequeue(string[] queues, CancellationToken cancellationToken);
         void Enqueue(string queue, string jobId);
     }
 }
