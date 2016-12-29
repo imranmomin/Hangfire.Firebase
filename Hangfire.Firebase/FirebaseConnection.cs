@@ -411,9 +411,9 @@ namespace Hangfire.Firebase
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, Hash> existingHashes = response.ResultAs<Dictionary<string, Hash>>();
-                string[] hashReferences = existingHashes?.Select(h => h.Value).Where(h => hashes.Any(k => k.Field == h.Field))
-                                                                              .Select(h => h.Value)
-                                                                              .ToArray();
+                string[] hashReferences = existingHashes?.Where(h => hashes.Any(k => k.Field == h.Value.Field))
+                                                         .Select(h => h.Key)
+                                                         .ToArray();
                 if (hashReferences != null)
                 {
                     // updates 
@@ -423,7 +423,7 @@ namespace Hangfire.Firebase
                         if (existingHashes.TryGetValue(hashReference, out hash) && hashes.Any(k => k.Field == hash.Field))
                         {
                             string value = hashes.Where(k => k.Field == hash.Field).Select(k => k.Value).Single();
-                            Task<FirebaseResponse> task = Task.Run(() => (FirebaseResponse)Client.Set($"hashes/{key}/{hashReferences}/value", value));
+                            Task<FirebaseResponse> task = Task.Run(() => (FirebaseResponse)Client.Set($"hashes/{key}/{hashReference}/value", value));
                             tasks.Add(task);
 
                             // remove the hash from the list
