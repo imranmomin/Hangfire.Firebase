@@ -272,7 +272,10 @@ namespace Hangfire.Firebase
             if (serverId == null) throw new ArgumentNullException(nameof(serverId));
             if (context == null) throw new ArgumentNullException(nameof(context));
 
-            FirebaseResponse response = Client.Get("servers");
+            QueryBuilder builder = QueryBuilder.New($@"equalTo=""{serverId}""");
+            builder.OrderBy("_id");
+
+            FirebaseResponse response = Client.Get("servers", builder);
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, Entities.Server> servers = response.ResultAs<Dictionary<string, Entities.Server>>();
@@ -314,7 +317,11 @@ namespace Hangfire.Firebase
         public override void Heartbeat(string serverId)
         {
             if (serverId == null) throw new ArgumentNullException(nameof(serverId));
-            FirebaseResponse response = Client.Get("servers");
+
+            QueryBuilder builder = QueryBuilder.New($@"equalTo=""{serverId}""");
+            builder.OrderBy("_id");
+
+            FirebaseResponse response = Client.Get("servers", builder);
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, Entities.Server> servers = response.ResultAs<Dictionary<string, Entities.Server>>();
@@ -337,7 +344,10 @@ namespace Hangfire.Firebase
         {
             if (serverId == null) throw new ArgumentNullException(nameof(serverId));
 
-            FirebaseResponse response = Client.Get("servers");
+            QueryBuilder builder = QueryBuilder.New($@"equalTo=""{serverId}""");
+            builder.OrderBy("_id");
+
+            FirebaseResponse response = Client.Get("servers", builder);
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, Entities.Server> servers = response.ResultAs<Dictionary<string, Entities.Server>>();
