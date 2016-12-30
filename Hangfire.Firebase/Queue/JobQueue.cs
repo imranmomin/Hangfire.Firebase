@@ -37,7 +37,7 @@ namespace Hangfire.Firebase.Queue
                         if (response.StatusCode == System.Net.HttpStatusCode.OK)
                         {
                             Dictionary<string, Dictionary<string, string>> collection = response.ResultAs<Dictionary<string, Dictionary<string, string>>>();
-                            if (collection != null)
+                            if (collection != null && queues.Any(q => collection.ContainsKey(q)))
                             {
                                 var data = collection.Select(q => new { Queue = q.Key, Data = q.Value.Select(v => new { Reference = v.Key, JobId = v.Value }).FirstOrDefault() })
                                                      .Select(q => new { q.Queue, q.Data.Reference, q.Data.JobId })
