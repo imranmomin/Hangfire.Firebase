@@ -245,7 +245,6 @@ namespace Hangfire.Firebase
                         }
                     }
                 }
-
             });
         }
 
@@ -258,21 +257,23 @@ namespace Hangfire.Firebase
 
             QueueCommand(() =>
             {
-                Set data = new Set
+                Set data = new Set { Key = key, Value = value, Score = score };
+                FirebaseResponse response = connection.Client.Get($"sets");
+                if (response.StatusCode == HttpStatusCode.OK)
                 {
-                    Key = key,
-                    Value = value,
-                    Score = score
-                };
+                    Dictionary<string, Set> sets = response.ResultAs<Dictionary<string, Set>>();
+                    string reference = sets?.Where(s => s.Value.Key == key && s.Value.Value == value).Select(s => s.Key).FirstOrDefault();
 
-                FirebaseResponse response = connection.Client.Push($"sets", data);
-                if (response.StatusCode != HttpStatusCode.OK)
-                {
-                    throw new HttpRequestException(response.Body);
+                    response = !string.IsNullOrEmpty(reference) ? (FirebaseResponse)connection.Client.Set($"sets/{reference}", data)
+                                                                : (FirebaseResponse)connection.Client.Push($"sets", data);
+
+                    if (response.StatusCode != HttpStatusCode.OK)
+                    {
+                        throw new HttpRequestException(response.Body);
+                    }
                 }
             });
         }
-
 
         #endregion
 
