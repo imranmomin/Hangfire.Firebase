@@ -3,9 +3,9 @@ using System.Linq;
 using System.Threading;
 using System.Collections.Generic;
 
+using FireSharp;
 using Hangfire.Storage;
 using FireSharp.Response;
-
 
 namespace Hangfire.Firebase.Queue
 {
@@ -26,6 +26,7 @@ namespace Hangfire.Firebase.Queue
 
         public IFetchedJob Dequeue(string[] queues, CancellationToken cancellationToken)
         {
+            int index = 0;
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -33,14 +34,18 @@ namespace Hangfire.Firebase.Queue
                 {
                     using (FirebaseDistributedLock @lock = new FirebaseDistributedLock(dequeueLockKey, defaultLockTimeout, connection.Client))
                     {
-                        FirebaseResponse response = connection.Client.Get("queue");
+                        QueryBuilder buidler = QueryBuilder.New();
+                        buidler.OrderBy("$key");
+                        buidler.LimitToFirst(1);
+
+                        string queue = queues.ElementAt(index);
+                        FirebaseResponse response = connection.Client.Get($"queue/{queue}", buidler);
                         if (response.StatusCode == System.Net.HttpStatusCode.OK)
                         {
-                            Dictionary<string, Dictionary<string, string>> collection = response.ResultAs<Dictionary<string, Dictionary<string, string>>>();
-                            if (collection != null && queues.Any(q => collection.ContainsKey(q)))
+                            Dictionary<string, string> collection = response.ResultAs<Dictionary<string, string>>();
+                            if (collection != null)
                             {
-                                var data = collection.Select(q => new { Queue = q.Key, Data = q.Value.Select(v => new { Reference = v.Key, JobId = v.Value }).FirstOrDefault() })
-                                                     .Select(q => new { q.Queue, q.Data.Reference, q.Data.JobId })
+                                var data = collection.Select(q => new { Queue = queue, Reference = q.Key, JobId = q.Value })
                                                      .FirstOrDefault();
 
                                 if (!string.IsNullOrEmpty(data.JobId) && !string.IsNullOrEmpty(data.Reference))
@@ -52,7 +57,9 @@ namespace Hangfire.Firebase.Queue
                         }
                     }
                 }
+
                 Thread.Sleep(checkInterval);
+                index = (index + 1) % queues.Length;
             }
         }
 
