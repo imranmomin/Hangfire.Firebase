@@ -9,6 +9,7 @@ using Hangfire.Firebase.Entities;
 using Hangfire.Firebase.Queue;
 using Hangfire.States;
 using Hangfire.Storage;
+using FireSharp;
 
 namespace Hangfire.Firebase
 {
@@ -368,12 +369,8 @@ namespace Hangfire.Firebase
 
             QueueCommand(() =>
             {
-                List data = new List
-                {
-                    Value = value
-                };
-
-                FirebaseResponse response = connection.Client.Push($"lists/{key}", data);
+                List data = new List { Key = key, Value = value };
+                FirebaseResponse response = connection.Client.Push($"lists", data);
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
                     throw new HttpRequestException(response.Body);
@@ -388,14 +385,17 @@ namespace Hangfire.Firebase
 
             QueueCommand(() =>
             {
-                FirebaseResponse response = connection.Client.Get($"lists/{key}");
+                QueryBuilder builder = QueryBuilder.New($@"equalTo=""{key}""");
+                builder.OrderBy("$key");
+
+                FirebaseResponse response = connection.Client.Get($"lists", builder);
                 if (response.StatusCode == HttpStatusCode.OK)
                 {
                     Dictionary<string, List> lists = response.ResultAs<Dictionary<string, List>>();
-                    string valueReference = lists?.Where(l => l.Value.Value == value).Select(k => k.Key).FirstOrDefault();
-                    if (string.IsNullOrEmpty(valueReference))
+                    string reference = lists?.Where(l => l.Value.Key == key && l.Value.Value == value).Select(k => k.Key).FirstOrDefault();
+                    if (string.IsNullOrEmpty(reference))
                     {
-                        response = connection.Client.Delete($"lists/{key}/{valueReference}");
+                        response = connection.Client.Delete($"lists/{reference}");
                         if (response.StatusCode != HttpStatusCode.OK)
                         {
                             throw new HttpRequestException(response.Body);
@@ -411,21 +411,24 @@ namespace Hangfire.Firebase
 
             QueueCommand(() =>
             {
-                if (key == null) throw new ArgumentNullException(nameof(key));
+                QueryBuilder builder = QueryBuilder.New($@"equalTo=""{key}""");
+                builder.OrderBy("$key");
 
-
-                FirebaseResponse response = connection.Client.Get($"lists/{key}");
+                FirebaseResponse response = connection.Client.Get($"lists", builder);
                 if (response.StatusCode == HttpStatusCode.OK)
                 {
                     Dictionary<string, List> lists = response.ResultAs<Dictionary<string, List>>();
-                    string[] listsReferences = lists?.Skip(keepStartingFrom).Take(keepEndingAt).Select(l => l.Key).ToArray();
+                    string[] listsReferences = lists?.Where(l => l.Value.Key == key)
+                                                     .Skip(keepStartingFrom).Take(keepEndingAt)
+                                                     .Select(l => l.Key)
+                                                     .ToArray();
 
-                    if (listsReferences != null)
+                    if (listsReferences != null && listsReferences.Length > 0)
                     {
                         List<Task<FirebaseResponse>> tasks = new List<Task<FirebaseResponse>>();
-                        Array.ForEach(listsReferences, listReference =>
+                        Array.ForEach(listsReferences, reference =>
                         {
-                            Task<FirebaseResponse> task = Task.Run(() => connection.Client.Delete($"lists/{key}/{listReference}/value"));
+                            Task<FirebaseResponse> task = Task.Run(() => connection.Client.Delete($"lists/{reference}"));
                             tasks.Add(task);
                         });
                         Task.WaitAll(tasks.ToArray());
