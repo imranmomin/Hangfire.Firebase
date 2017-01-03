@@ -232,14 +232,17 @@ namespace Hangfire.Firebase
 
             QueueCommand(() =>
             {
-                FirebaseResponse response = connection.Client.Get($"sets");
+                QueryBuilder builder = QueryBuilder.New($@"equalTo=""{key}""");
+                builder.OrderBy("$key");
+
+                FirebaseResponse response = connection.Client.Get($"sets", builder);
                 if (response.StatusCode == HttpStatusCode.OK)
                 {
                     Dictionary<string, Set> sets = response.ResultAs<Dictionary<string, Set>>();
-                    string setReference = sets?.Where(s => s.Value.Key == key && s.Value.Value == value).Select(s => s.Key).FirstOrDefault();
-                    if (string.IsNullOrEmpty(setReference))
+                    string reference = sets?.Where(s => s.Value.Key == key && s.Value.Value == value).Select(s => s.Key).FirstOrDefault();
+                    if (string.IsNullOrEmpty(reference))
                     {
-                        response = connection.Client.Delete($"sets/{setReference}");
+                        response = connection.Client.Delete($"sets/{reference}");
                         if (response.StatusCode != HttpStatusCode.OK)
                         {
                             throw new HttpRequestException(response.Body);
@@ -259,7 +262,11 @@ namespace Hangfire.Firebase
             QueueCommand(() =>
             {
                 Set data = new Set { Key = key, Value = value, Score = score };
-                FirebaseResponse response = connection.Client.Get($"sets");
+
+                QueryBuilder builder = QueryBuilder.New($@"equalTo=""{key}""");
+                builder.OrderBy("$key");
+                               
+                FirebaseResponse response = connection.Client.Get($"sets", builder);
                 if (response.StatusCode == HttpStatusCode.OK)
                 {
                     Dictionary<string, Set> sets = response.ResultAs<Dictionary<string, Set>>();
