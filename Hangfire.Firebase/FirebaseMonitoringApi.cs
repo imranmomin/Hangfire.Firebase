@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 
 using FireSharp;
+using Hangfire.Common;
 using Hangfire.Storage;
 using FireSharp.Response;
 using Hangfire.Firebase.Queue;
@@ -56,27 +57,106 @@ namespace Hangfire.Firebase
 
         public JobList<ProcessingJobDto> ProcessingJobs(int @from, int count)
         {
-            throw new NotImplementedException();
+            return GetJobs(States.ProcessingState.StateName, @from, count, (state, invocationData) => new ProcessingJobDto
+            {
+                Job = invocationData.Deserialize(),
+                ServerId = state.Data.ContainsKey("ServerId") ? state.Data["ServerId"] : state.Data["ServerName"],
+                StartedAt = JobHelper.DeserializeDateTime(state.Data["StartedAt"]),
+            });
         }
 
         public JobList<ScheduledJobDto> ScheduledJobs(int @from, int count)
         {
-            throw new NotImplementedException();
+            return GetJobs(States.ScheduledState.StateName, @from, count, (state, invocationData) => new ScheduledJobDto
+            {
+                Job = invocationData.Deserialize(),
+                EnqueueAt = JobHelper.DeserializeDateTime(state.Data["EnqueueAt"]),
+                ScheduledAt = JobHelper.DeserializeDateTime(state.Data["ScheduledAt"])
+            });
         }
 
         public JobList<SucceededJobDto> SucceededJobs(int @from, int count)
         {
-            throw new NotImplementedException();
+            return GetJobs(States.SucceededState.StateName, @from, count, (state, invocationData) => new SucceededJobDto
+            {
+                Job = invocationData.Deserialize(),
+                Result = state.Data["result"],
+                TotalDuration = state.Data.ContainsKey("PerformanceDuration") && state.Data.ContainsKey("Latency")
+                                ? (long?)long.Parse(state.Data["PerformanceDuration"]) + long.Parse(state.Data["Latency"])
+                                : null,
+                SucceededAt = JobHelper.DeserializeNullableDateTime(state.Data["SucceededAt"])
+            });
         }
 
         public JobList<FailedJobDto> FailedJobs(int @from, int count)
         {
-            throw new NotImplementedException();
+            return GetJobs(States.FailedState.StateName, @from, count, (state, invocationData) => new FailedJobDto
+            {
+                Job = invocationData.Deserialize(),
+                Reason = state.Reason,
+                FailedAt = JobHelper.DeserializeNullableDateTime(state.Data["FailedAt"]),
+                ExceptionDetails = state.Data["ExceptionDetails"],
+                ExceptionMessage = state.Data["ExceptionMessage"],
+                ExceptionType = state.Data["ExceptionType"],
+            });
         }
 
         public JobList<DeletedJobDto> DeletedJobs(int @from, int count)
         {
-            throw new NotImplementedException();
+            return GetJobs(States.DeletedState.StateName, @from, count, (state, invocationData) => new DeletedJobDto
+            {
+                Job = invocationData.Deserialize(),
+                DeletedAt = JobHelper.DeserializeNullableDateTime(state.Data["DeletedAt"])
+            });
+        }
+
+        private JobList<T> GetJobs<T>(string stateName, int @from, int count, Func<State, InvocationData, T> selector)
+        {
+            List<KeyValuePair<string, T>> jobs = new List<KeyValuePair<string, T>>();
+            QueryBuilder builder = QueryBuilder.New($@"equalTo=""{stateName}""");
+            builder.OrderBy("state_name");
+
+            FirebaseResponse response = connection.Client.Get("jobs", builder);
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                Dictionary<string, Entities.Job> collections = response.ResultAs<Dictionary<string, Entities.Job>>();
+                string[] references = collections?.Skip(@from).Take(count).Select(k => k.Key).ToArray();
+
+                if (references != null && references.Length > 0)
+                {
+                    List<Task<KeyValuePair<string, T>>> tasks = new List<Task<KeyValuePair<string, T>>>();
+                    Array.ForEach(references, reference =>
+                    {
+                        Entities.Job job;
+                        if (collections.TryGetValue(reference, out job))
+                        {
+                            Task<KeyValuePair<string, T>> task = Task.Run(() =>
+                            {
+                                FirebaseResponse stateResponse = connection.Client.Get($"states/{reference}/{job.StateId}");
+                                if (stateResponse.StatusCode == HttpStatusCode.OK)
+                                {
+                                    State state = stateResponse.ResultAs<State>();
+                                    InvocationData invocationData = job.InvocationData;
+                                    invocationData.Arguments = job.Arguments;
+
+                                    T data = selector(state, invocationData);
+                                    if (data != null)
+                                    {
+                                        return new KeyValuePair<string, T>(reference, data);
+                                    }
+                                }
+                                return default(KeyValuePair<string, T>);
+                            });
+                            tasks.Add(task);
+                        }
+                    });
+
+                    Task.WaitAll(tasks.ToArray());
+                    jobs = tasks.Where(t => !t.Result.Equals(default(KeyValuePair<string, T>))).Select(t => t.Result).ToList();
+                }
+            }
+
+            return new JobList<T>(jobs); ;
         }
 
         #region Counts
@@ -111,7 +191,7 @@ namespace Hangfire.Firebase
             builder.OrderBy("state_name");
             builder.Shallow(true);
 
-            FirebaseResponse response = connection.Client.Get("jobs");
+            FirebaseResponse response = connection.Client.Get("jobs", builder);
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, bool> jobs = response.ResultAs<Dictionary<string, bool>>();

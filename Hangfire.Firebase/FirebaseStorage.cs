@@ -40,7 +40,7 @@ namespace Hangfire.Firebase
 
         public override IStorageConnection GetConnection() => new FirebaseConnection(config, QueueProviders);
 
-        public override IMonitoringApi GetMonitoringApi() => new FirebaseMonitoringApi();
+        public override IMonitoringApi GetMonitoringApi() => new FirebaseMonitoringApi(this);
 
 #pragma warning disable 618
         public override IEnumerable<IServerComponent> GetComponents()
