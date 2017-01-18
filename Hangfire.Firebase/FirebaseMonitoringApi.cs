@@ -53,7 +53,46 @@ namespace Hangfire.Firebase
 
         public JobDetailsDto JobDetails(string jobId)
         {
-            throw new NotImplementedException();
+            List<Parameter> parameters = new List<Parameter>();
+            List<StateHistoryDto> states = new List<StateHistoryDto>();
+
+            FirebaseResponse response = connection.Client.Get($"jobs/{jobId}");
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                Entities.Job job = response.ResultAs<Entities.Job>();
+                InvocationData invocationData = job.InvocationData;
+                invocationData.Arguments = job.Arguments;
+                
+                FirebaseResponse parameterResponse = connection.Client.Get($"jobs/{jobId}/parameters");
+                if (parameterResponse.StatusCode == HttpStatusCode.OK)
+                {
+                    parameters = parameterResponse.ResultAs<List<Parameter>>();
+                }
+
+                FirebaseResponse stateResponse = connection.Client.Get($"states/{jobId}");
+                if (stateResponse.StatusCode == HttpStatusCode.OK)
+                {
+                    Dictionary<string, State> collections = stateResponse.ResultAs<Dictionary<string, State>>();
+                    states = collections.Select(s => new StateHistoryDto
+                    {
+                        Data = s.Value.Data,
+                        CreatedAt = s.Value.CreatedOn,
+                        Reason = s.Value.Reason,
+                        StateName = s.Value.Name
+                    }).ToList();
+                }
+
+                return new JobDetailsDto
+                {
+                    Job = invocationData.Deserialize(),
+                    CreatedAt = job.CreatedOn,
+                    ExpireAt = job.ExpireOn,
+                    Properties = parameters.ToDictionary(p => p.Name, p => p.Value),
+                    History = states
+                };
+            }
+
+            return null;
         }
 
         public StatisticsDto GetStatistics()
@@ -61,14 +100,36 @@ namespace Hangfire.Firebase
             throw new NotImplementedException();
         }
 
+        #region Job List
+
         public JobList<EnqueuedJobDto> EnqueuedJobs(string queue, int @from, int perPage)
         {
-            throw new NotImplementedException();
+            return GetJobs(queue, @from, perPage, (job) =>
+            {
+                InvocationData invocationData = job.InvocationData;
+                invocationData.Arguments = job.Arguments;
+
+                return new EnqueuedJobDto
+                {
+                    Job = invocationData.Deserialize(),
+                    State = job.StateName
+                };
+            });
         }
 
         public JobList<FetchedJobDto> FetchedJobs(string queue, int @from, int perPage)
         {
-            throw new NotImplementedException();
+            return GetJobs(queue, @from, perPage, (job) =>
+            {
+                InvocationData invocationData = job.InvocationData;
+                invocationData.Arguments = job.Arguments;
+
+                return new FetchedJobDto
+                {
+                    Job = invocationData.Deserialize(),
+                    State = job.StateName
+                };
+            });
         }
 
         public JobList<ProcessingJobDto> ProcessingJobs(int @from, int count)
@@ -172,8 +233,51 @@ namespace Hangfire.Firebase
                 }
             }
 
-            return new JobList<T>(jobs); ;
+            return new JobList<T>(jobs);
         }
+
+        private JobList<T> GetJobs<T>(string queue, int @from, int count, Func<Entities.Job, T> selector)
+        {
+            List<KeyValuePair<string, T>> jobs = new List<KeyValuePair<string, T>>();
+
+            FirebaseResponse response = connection.Client.Get($"queue/${queue}");
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                Dictionary<string, string> collection = response.ResultAs<Dictionary<string, string>>();
+                string[] references = collection?.Skip(@from - 1).Take(count).Select(k => k.Value).ToArray();
+
+                if (references != null && references.Length > 0)
+                {
+                    List<Task<KeyValuePair<string, T>>> tasks = new List<Task<KeyValuePair<string, T>>>();
+                    Array.ForEach(references, reference =>
+                    {
+                        Task<KeyValuePair<string, T>> task = Task.Run(() =>
+                        {
+                            FirebaseResponse jobResponse = connection.Client.Get($"jobs/{reference}");
+                            if (jobResponse.StatusCode == HttpStatusCode.OK)
+                            {
+                                Entities.Job job = jobResponse.ResultAs<Entities.Job>();
+                                T data = selector(job);
+                                if (data != null)
+                                {
+                                    return new KeyValuePair<string, T>(reference, data);
+                                }
+                            }
+                            return default(KeyValuePair<string, T>);
+                        });
+                        tasks.Add(task);
+
+                    });
+
+                    Task.WaitAll(tasks.ToArray());
+                    jobs = tasks.Where(t => !t.Result.Equals(default(KeyValuePair<string, T>))).Select(t => t.Result).ToList();
+                }
+            }
+
+            return new JobList<T>(jobs);
+        }
+
+        #endregion
 
         #region Counts
 
