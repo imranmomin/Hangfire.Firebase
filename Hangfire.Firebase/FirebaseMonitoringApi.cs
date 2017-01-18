@@ -32,7 +32,23 @@ namespace Hangfire.Firebase
 
         public IList<ServerDto> Servers()
         {
-            throw new NotImplementedException();
+            List<ServerDto> servers = new List<ServerDto>();
+
+            FirebaseResponse response = connection.Client.Get("servers");
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                Dictionary<string, Entities.Server> collections = response.ResultAs<Dictionary<string, Entities.Server>>();
+                servers = collections?.Select(s => new ServerDto
+                {
+                    Name = s.Value.Id,
+                    Heartbeat = s.Value.LastHeartbeat,
+                    Queues = s.Value.Queues,
+                    StartedAt = s.Value.CreatedOn,
+                    WorkersCount = s.Value.Workers
+                }).ToList();
+            }
+
+            return servers;
         }
 
         public JobDetailsDto JobDetails(string jobId)
