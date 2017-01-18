@@ -32,7 +32,7 @@ namespace Hangfire.Firebase.Queue
                 cancellationToken.ThrowIfCancellationRequested();
                 lock (syncLock)
                 {
-                    using (FirebaseDistributedLock @lock = new FirebaseDistributedLock(dequeueLockKey, defaultLockTimeout, connection.Client))
+                    using (new FirebaseDistributedLock(dequeueLockKey, defaultLockTimeout, connection.Client))
                     {
                         QueryBuilder buidler = QueryBuilder.New();
                         buidler.OrderBy("$key");
@@ -43,16 +43,13 @@ namespace Hangfire.Firebase.Queue
                         if (response.StatusCode == System.Net.HttpStatusCode.OK)
                         {
                             Dictionary<string, string> collection = response.ResultAs<Dictionary<string, string>>();
-                            if (collection != null)
-                            {
-                                var data = collection.Select(q => new { Queue = queue, Reference = q.Key, JobId = q.Value })
-                                                     .FirstOrDefault();
+                            var data = collection?.Select(q => new { Queue = queue, Reference = q.Key, JobId = q.Value })
+                                .FirstOrDefault();
 
-                                if (!string.IsNullOrEmpty(data.JobId) && !string.IsNullOrEmpty(data.Reference))
-                                {
-                                    connection.Client.Delete($"queue/{data.Queue}/{data.Reference}");
-                                    return new FetchedJob(storage, data.Queue, data.JobId, data.Reference);
-                                }
+                            if (!string.IsNullOrEmpty(data?.JobId) && !string.IsNullOrEmpty(data.Reference))
+                            {
+                                connection.Client.Delete($"queue/{data.Queue}/{data.Reference}");
+                                return new FetchedJob(storage, data.Queue, data.JobId, data.Reference);
                             }
                         }
                     }
