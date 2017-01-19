@@ -62,7 +62,7 @@ namespace Hangfire.Firebase
                 Entities.Job job = response.ResultAs<Entities.Job>();
                 InvocationData invocationData = job.InvocationData;
                 invocationData.Arguments = job.Arguments;
-                
+
                 FirebaseResponse parameterResponse = connection.Client.Get($"jobs/{jobId}/parameters");
                 if (parameterResponse.StatusCode == HttpStatusCode.OK)
                 {
@@ -97,7 +97,124 @@ namespace Hangfire.Firebase
 
         public StatisticsDto GetStatistics()
         {
-            throw new NotImplementedException();
+            List<Task<Dictionary<string, long>>> tasks = new List<Task<Dictionary<string, long>>>();
+
+            // get counts of jobs groupby on state
+            Task<Dictionary<string, long>> jobs = Task.Run(() =>
+            {
+                FirebaseResponse response = connection.Client.Get("jobs");
+                if (response.StatusCode == HttpStatusCode.OK)
+                {
+                    Dictionary<string, Entities.Job> collections = response.ResultAs<Dictionary<string, Entities.Job>>();
+                    return collections?.Select(c => c.Value).GroupBy(j => j.StateName).ToDictionary(g => g.Key, g => g.LongCount());
+                }
+                return new Dictionary<string, long>();
+            });
+            tasks.Add(jobs);
+
+            // get counts of servers
+            Task<Dictionary<string, long>> servers = Task.Run(() =>
+            {
+                QueryBuilder builder = QueryBuilder.New();
+                builder.Shallow(true);
+                FirebaseResponse response = connection.Client.Get("servers", builder);
+                if (response.StatusCode == HttpStatusCode.OK)
+                {
+                    Dictionary<string, bool> collections = response.ResultAs<Dictionary<string, bool>>();
+                    return new Dictionary<string, long>
+                    {
+                        { "Servers", collections.LongCount() }
+                    };
+                }
+                return new Dictionary<string, long>();
+            });
+            tasks.Add(servers);
+
+            // get sum of stats:succeeded counters / aggregatedcounter
+            Task<Dictionary<string, long>> successCounters = Task.Run(() =>
+            {
+                int value = 0;
+                FirebaseResponse response = connection.Client.Get("counters/raw/stats:succeeded");
+                if (response.StatusCode == HttpStatusCode.OK)
+                {
+                    Dictionary<string, Counter> collections = response.ResultAs<Dictionary<string, Counter>>();
+                    value += collections.Sum(c => c.Value.Value);
+                }
+
+                response = connection.Client.Get("counters/aggregrated/stats:succeeded");
+                if (response.StatusCode == HttpStatusCode.OK)
+                {
+                    Dictionary<string, Counter> collections = response.ResultAs<Dictionary<string, Counter>>();
+                    value += collections.Sum(c => c.Value.Value);
+                }
+
+                return new Dictionary<string, long>
+                {
+                    { "stats:succeeded", value }
+                };
+            });
+            tasks.Add(successCounters);
+
+            // get sum of stats:deleted counters / aggregatedcounter 
+            Task<Dictionary<string, long>> deletedCounters = Task.Run(() =>
+            {
+                int value = 0;
+                FirebaseResponse response = connection.Client.Get("counters/raw/stats:deleted");
+                if (response.StatusCode == HttpStatusCode.OK)
+                {
+                    Dictionary<string, Counter> collections = response.ResultAs<Dictionary<string, Counter>>();
+                    value += collections.Sum(c => c.Value.Value);
+                }
+
+                response = connection.Client.Get("counters/aggregrated/stats:deleted");
+                if (response.StatusCode == HttpStatusCode.OK)
+                {
+                    Dictionary<string, Counter> collections = response.ResultAs<Dictionary<string, Counter>>();
+                    value += collections.Sum(c => c.Value.Value);
+                }
+
+                return new Dictionary<string, long>
+                {
+                    { "stats:deleted", value }
+                };
+            });
+            tasks.Add(deletedCounters);
+
+            // get counts of servers
+            Task<Dictionary<string, long>> recurringJobs = Task.Run(() =>
+            {
+                QueryBuilder builder = QueryBuilder.New($@"equalTo=""recurring - jobs""");
+                builder.OrderBy("key");
+                FirebaseResponse response = connection.Client.Get("sets", builder);
+                if (response.StatusCode == HttpStatusCode.OK)
+                {
+                    Dictionary<string, Set> collections = response.ResultAs<Dictionary<string, Set>>();
+                    return new Dictionary<string, long>
+                    {
+                        { "recurring-jobs", collections.LongCount() }
+                    };
+                }
+                return new Dictionary<string, long>();
+            });
+            tasks.Add(recurringJobs);
+
+            // get recurring-jobs count from sets
+            Task.WaitAll(tasks.ToArray());
+            Dictionary<string, long> results = tasks.Where(t => t.IsCompleted).SelectMany(t => t.Result).ToDictionary(t => t.Key, t => t.Value);
+            Func<string, long> getValueOrDefault = (key) => results.Where(r => r.Key == key).Select(r => r.Value).SingleOrDefault();
+
+            return new StatisticsDto
+            {
+                Enqueued = getValueOrDefault("Enqueued"),
+                Failed = getValueOrDefault("Failed"),
+                Processing = getValueOrDefault("Processing"),
+                Scheduled = getValueOrDefault("Scheduled"),
+                Succeeded = getValueOrDefault("stats:succeeded"),
+                Deleted = getValueOrDefault("stats:deleted"),
+                Recurring = getValueOrDefault("recurring-jobs"),
+                Servers = getValueOrDefault("Servers"),
+                Queues = storage.Options.Queues.LongLength
+            };
         }
 
         #region Job List
