@@ -27,7 +27,29 @@ namespace Hangfire.Firebase
 
         public IList<QueueWithTopEnqueuedJobsDto> Queues()
         {
-            throw new NotImplementedException();
+            List<Task<QueueWithTopEnqueuedJobsDto>> tasks = new List<Task<QueueWithTopEnqueuedJobsDto>>();
+
+            Array.ForEach(storage.Options.Queues, queue =>
+            {
+                Task<QueueWithTopEnqueuedJobsDto> task = Task.Run(() =>
+                {
+                    long enqueueCount = EnqueuedCount(queue);
+                    JobList<EnqueuedJobDto> jobs = EnqueuedJobs(queue, 1, 1);
+
+                    return new QueueWithTopEnqueuedJobsDto
+                    {
+                        Length = enqueueCount,
+                        Fetched = 0,
+                        Name = queue,
+                        FirstJobs = jobs
+                    };
+                });
+                tasks.Add(task);
+            });
+
+            Task.WaitAll(tasks.ToArray());
+            List<QueueWithTopEnqueuedJobsDto> queueJobs = tasks.Where(t => t.IsCompleted && !t.IsFaulted).Select(t => t.Result).ToList();
+            return queueJobs;
         }
 
         public IList<ServerDto> Servers()
