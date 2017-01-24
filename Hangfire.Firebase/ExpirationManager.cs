@@ -18,7 +18,7 @@ namespace Hangfire.Firebase
         private static readonly ILog Logger = LogProvider.For<ExpirationManager>();
         private const string distributedLockKey = "expirationmanager";
         private static readonly TimeSpan defaultLockTimeout = TimeSpan.FromMinutes(5);
-        private static readonly string[] documents = new[] { "locks", "jobs", "lists", "sets", "hashs", "counters/aggregrated" };
+        private static readonly string[] documents = { "locks", "jobs", "lists", "sets", "hashs", "counters/aggregrated" };
         private readonly FirebaseConnection connection;
         private readonly TimeSpan checkInterval;
 
@@ -36,7 +36,7 @@ namespace Hangfire.Firebase
             {
                 Logger.Debug($"Removing outdated records from the '{document}' document.");
 
-                using (FirebaseDistributedLock @lock = new FirebaseDistributedLock(distributedLockKey, defaultLockTimeout, connection.Client))
+                using (new FirebaseDistributedLock(distributedLockKey, defaultLockTimeout, connection.Client))
                 {
                     FirebaseResponse respone = connection.Client.Get($"{document}");
                     if (respone.StatusCode == System.Net.HttpStatusCode.OK)
@@ -45,13 +45,7 @@ namespace Hangfire.Firebase
                         string[] references = collection?.Where(c => c.Value.ExpireOn.HasValue && c.Value.ExpireOn < DateTime.UtcNow).Select(c => c.Key).ToArray();
                         if (references != null && references.Length > 0)
                         {
-                            List<Task<FirebaseResponse>> tasks = new List<Task<FirebaseResponse>>();
-                            Array.ForEach(references, reference =>
-                            {
-                                Task<FirebaseResponse> task = Task.Run(() => connection.Client.Delete($"{document}/{reference}"));
-                                tasks.Add(task);
-                            });
-                            Task.WaitAll(tasks.ToArray());
+                            Parallel.ForEach(references, reference => connection.Client.Delete($"{document}/{reference}"));
                         }
                     }
                 }
