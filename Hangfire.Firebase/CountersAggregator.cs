@@ -34,76 +34,60 @@ namespace Hangfire.Firebase
         {
             Logger.Debug("Aggregating records in 'Counter' table.");
 
-            using (FirebaseDistributedLock @lock = new FirebaseDistributedLock(distributedLockKey, defaultLockTimeout, connection.Client))
+            using (new FirebaseDistributedLock(distributedLockKey, defaultLockTimeout, connection.Client))
             {
-                FirebaseResponse respone = connection.Client.Get("counters/raw");
-                if (respone.StatusCode == HttpStatusCode.OK)
+                FirebaseResponse response = connection.Client.Get("counters/raw");
+                if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
                 {
-                    Dictionary<string, Dictionary<string, Counter>> counters = respone.ResultAs<Dictionary<string, Dictionary<string, Counter>>>();
-                    string[] keys = counters?.Select(k => k.Key).ToArray();
-                    if (keys != null)
+                    Dictionary<string, Dictionary<string, Counter>> counters = response.ResultAs<Dictionary<string, Dictionary<string, Counter>>>();
+                    Array.ForEach(counters.Keys.ToArray(), key =>
                     {
-                        List<Task<bool>> tasks = new List<Task<bool>>();
-                        Array.ForEach(keys, key =>
-                        {
-                            cancellationToken.ThrowIfCancellationRequested();
+                        cancellationToken.ThrowIfCancellationRequested();
 
-                            Task<bool> task = Task.Run(() =>
+                        Dictionary<string, Counter> data;
+                        if (counters.TryGetValue(key, out data))
+                        {
+                            data = data.ToDictionary(k => k.Key, v => v.Value);
+
+                            int value = data.Sum(c => c.Value.Value);
+                            DateTime? expireOn = data.Max(c => c.Value.ExpireOn);
+                            Counter aggregated = new Counter
                             {
-                                Dictionary<string, Counter> data;
-                                if (counters.TryGetValue(key, out data))
+                                Value = value,
+                                ExpireOn = expireOn
+                            };
+
+                            FirebaseResponse counterResponse = connection.Client.Get($"counters/aggregrated/{key}");
+                            if (response.StatusCode == HttpStatusCode.OK && !counterResponse.IsNull())
+                            {
+                                Dictionary<string, Counter> collections = response.ResultAs<Dictionary<string, Counter>>();
+                                if (collections != null)
                                 {
-                                    data = data.Where(c => c.Value.ExpireOn.HasValue && c.Value.ExpireOn < DateTime.UtcNow).ToDictionary(k => k.Key, v => v.Value);
-                                    if (data.Count > 0)
-                                    {
-                                        int value = data.Sum(c => c.Value.Value);
-                                        DateTime? expireOn = data.Max(c => c.Value.ExpireOn);
-                                        Counter aggregated = new Counter { Value = value, ExpireOn = expireOn };
-
-                                        FirebaseResponse response = connection.Client.Get($"counters/aggregrated/{key}");
-                                        if (response.StatusCode == HttpStatusCode.OK)
-                                        {
-                                            aggregated = response.ResultAs<Counter>();
-                                            aggregated.Value += value;
-                                            aggregated.ExpireOn = expireOn;
-                                        }
-
-                                        // update the aggregrated counter
-                                        response = connection.Client.Set($"counters/aggregrated/{key}", aggregated);
-                                        if (respone.StatusCode == HttpStatusCode.OK)
-                                        {
-                                            // delete all the counter references
-                                            string[] references = data.Select(c => c.Key).ToArray();
-                                            Array.ForEach(references, reference =>
-                                            {
-                                                response = connection.Client.Delete($"counters/aggregrated/{key}/{reference}");
-                                                Task.Delay(200);
-                                            });
-                                        }
-                                    }
+                                    aggregated = collections.Values.FirstOrDefault();
+                                    aggregated.Value += value;
+                                    aggregated.ExpireOn = expireOn;
                                 }
-                                return true;
-                            });
-                            tasks.Add(task);
-                        });
+                            }
 
-                        if (tasks.Count > 0)
-                        {
-                            Task.WaitAll(tasks.ToArray());
+                            // update the aggregrated counter
+                            FirebaseResponse aggResponse = connection.Client.Set($"counters/aggregrated/{key}", aggregated);
+                            if (aggResponse.StatusCode == HttpStatusCode.OK)
+                            {
+                                // delete all the counter references for the key
+                                Parallel.ForEach(data.Keys, reference => connection.Client.Delete($"counters/raw/{key}/{reference}"));
+                            }
                         }
-                    }
+                    });
+
+                    cancellationToken.WaitHandle.WaitOne(checkInterval);
                 }
-                cancellationToken.WaitHandle.WaitOne(checkInterval);
+
+                Logger.Trace("Records from the 'Counter' table aggregated.");
+                cancellationToken.ThrowIfCancellationRequested();
             }
-
-            Logger.Trace("Records from the 'Counter' table aggregated.");
-            cancellationToken.ThrowIfCancellationRequested();
         }
 
-        public override string ToString()
-        {
-            return GetType().ToString();
-        }
+        public override string ToString() => GetType().ToString();
 
     }
 }
