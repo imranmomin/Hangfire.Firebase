@@ -34,11 +34,11 @@ namespace Hangfire.Firebase.Queue
                 {
                     using (new FirebaseDistributedLock(dequeueLockKey, defaultLockTimeout, connection.Client))
                     {
+                        string queue = queues.ElementAt(index);
+
                         QueryBuilder buidler = QueryBuilder.New();
                         buidler.OrderBy("$key");
                         buidler.LimitToFirst(1);
-
-                        string queue = queues.ElementAt(index);
                         FirebaseResponse response = connection.Client.Get($"queue/{queue}", buidler);
                         if (response.StatusCode == System.Net.HttpStatusCode.OK)
                         {
