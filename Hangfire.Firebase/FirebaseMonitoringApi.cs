@@ -27,28 +27,21 @@ namespace Hangfire.Firebase
 
         public IList<QueueWithTopEnqueuedJobsDto> Queues()
         {
-            List<Task<QueueWithTopEnqueuedJobsDto>> tasks = new List<Task<QueueWithTopEnqueuedJobsDto>>();
+            List<QueueWithTopEnqueuedJobsDto> queueJobs = new List<QueueWithTopEnqueuedJobsDto>();
 
-            Array.ForEach(storage.Options.Queues, queue =>
+            Parallel.ForEach(storage.Options.Queues, queue =>
             {
-                Task<QueueWithTopEnqueuedJobsDto> task = Task.Run(() =>
+                long enqueueCount = EnqueuedCount(queue);
+                JobList<EnqueuedJobDto> jobs = EnqueuedJobs(queue, 0, 1);
+                queueJobs.Add(new QueueWithTopEnqueuedJobsDto
                 {
-                    long enqueueCount = EnqueuedCount(queue);
-                    JobList<EnqueuedJobDto> jobs = EnqueuedJobs(queue, 1, 1);
-
-                    return new QueueWithTopEnqueuedJobsDto
-                    {
-                        Length = enqueueCount,
-                        Fetched = 0,
-                        Name = queue,
-                        FirstJobs = jobs
-                    };
+                    Length = enqueueCount,
+                    Fetched = 0,
+                    Name = queue,
+                    FirstJobs = jobs
                 });
-                tasks.Add(task);
             });
 
-            Task.WaitAll(tasks.ToArray());
-            List<QueueWithTopEnqueuedJobsDto> queueJobs = tasks.Where(t => t.IsCompleted && !t.IsFaulted).Select(t => t.Result).ToList();
             return queueJobs;
         }
 
@@ -57,12 +50,12 @@ namespace Hangfire.Firebase
             List<ServerDto> servers = new List<ServerDto>();
 
             FirebaseResponse response = connection.Client.Get("servers");
-            if (response.StatusCode == HttpStatusCode.OK)
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, Entities.Server> collections = response.ResultAs<Dictionary<string, Entities.Server>>();
                 servers = collections?.Select(s => new ServerDto
                 {
-                    Name = s.Value.Id,
+                    Name = s.Value.ServerId,
                     Heartbeat = s.Value.LastHeartbeat,
                     Queues = s.Value.Queues,
                     StartedAt = s.Value.CreatedOn,
@@ -75,29 +68,22 @@ namespace Hangfire.Firebase
 
         public JobDetailsDto JobDetails(string jobId)
         {
-            List<Parameter> parameters = new List<Parameter>();
             List<StateHistoryDto> states = new List<StateHistoryDto>();
 
             FirebaseResponse response = connection.Client.Get($"jobs/{jobId}");
-            if (response.StatusCode == HttpStatusCode.OK)
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Entities.Job job = response.ResultAs<Entities.Job>();
                 InvocationData invocationData = job.InvocationData;
                 invocationData.Arguments = job.Arguments;
 
-                FirebaseResponse parameterResponse = connection.Client.Get($"jobs/{jobId}/parameters");
-                if (parameterResponse.StatusCode == HttpStatusCode.OK)
+                response = connection.Client.Get($"states/{jobId}");
+                if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
                 {
-                    parameters = parameterResponse.ResultAs<List<Parameter>>();
-                }
-
-                FirebaseResponse stateResponse = connection.Client.Get($"states/{jobId}");
-                if (stateResponse.StatusCode == HttpStatusCode.OK)
-                {
-                    Dictionary<string, State> collections = stateResponse.ResultAs<Dictionary<string, State>>();
+                    Dictionary<string, State> collections = response.ResultAs<Dictionary<string, State>>();
                     states = collections.Select(s => new StateHistoryDto
                     {
-                        Data = s.Value.Data,
+                        Data = s.Value.Data.Trasnform(),
                         CreatedAt = s.Value.CreatedOn,
                         Reason = s.Value.Reason,
                         StateName = s.Value.Name
@@ -109,7 +95,7 @@ namespace Hangfire.Firebase
                     Job = invocationData.Deserialize(),
                     CreatedAt = job.CreatedOn,
                     ExpireAt = job.ExpireOn,
-                    Properties = parameters.ToDictionary(p => p.Name, p => p.Value),
+                    Properties = job.Parameters.ToDictionary(p => p.Name, p => p.Value),
                     History = states
                 };
             }
@@ -119,111 +105,75 @@ namespace Hangfire.Firebase
 
         public StatisticsDto GetStatistics()
         {
-            List<Task<Dictionary<string, long>>> tasks = new List<Task<Dictionary<string, long>>>();
+            int count = 0;
+            FirebaseResponse response;
+            Dictionary<string, long> results = new Dictionary<string, long>();
+            Func<string, long> getValueOrDefault = (key) => results.Where(r => r.Key == key).Select(r => r.Value).SingleOrDefault();
 
             // get counts of jobs groupby on state
-            Task<Dictionary<string, long>> jobs = Task.Run(() =>
+            response = connection.Client.Get("jobs");
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
-                FirebaseResponse response = connection.Client.Get("jobs");
-                if (response.StatusCode == HttpStatusCode.OK)
-                {
-                    Dictionary<string, Entities.Job> collections = response.ResultAs<Dictionary<string, Entities.Job>>();
-                    return collections?.Select(c => c.Value).GroupBy(j => j.StateName).ToDictionary(g => g.Key, g => g.LongCount());
-                }
-                return new Dictionary<string, long>();
-            });
-            tasks.Add(jobs);
+                Dictionary<string, Entities.Job> collections = response.ResultAs<Dictionary<string, Entities.Job>>();
+                Dictionary<string, long> data = collections.Select(c => c.Value)
+                                                           .GroupBy(j => j.StateName)
+                                                           .Where(g => !string.IsNullOrEmpty(g.Key))
+                                                           .ToDictionary(g => g.Key, g => g.LongCount());
+                results = results.Concat(data).ToDictionary(k => k.Key, v => v.Value);
+            }
 
             // get counts of servers
-            Task<Dictionary<string, long>> servers = Task.Run(() =>
+            QueryBuilder builder = QueryBuilder.New();
+            builder.Shallow(true);
+            response = connection.Client.Get("servers", builder);
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
-                QueryBuilder builder = QueryBuilder.New();
-                builder.Shallow(true);
-                FirebaseResponse response = connection.Client.Get("servers", builder);
-                if (response.StatusCode == HttpStatusCode.OK)
-                {
-                    Dictionary<string, bool> collections = response.ResultAs<Dictionary<string, bool>>();
-                    return new Dictionary<string, long>
-                    {
-                        { "Servers", collections.LongCount() }
-                    };
-                }
-                return new Dictionary<string, long>();
-            });
-            tasks.Add(servers);
-
-            // get sum of stats:succeeded counters / aggregatedcounter
-            Task<Dictionary<string, long>> successCounters = Task.Run(() =>
-            {
-                int value = 0;
-                FirebaseResponse response = connection.Client.Get("counters/raw/stats:succeeded");
-                if (response.StatusCode == HttpStatusCode.OK)
-                {
-                    Dictionary<string, Counter> collections = response.ResultAs<Dictionary<string, Counter>>();
-                    value += collections.Sum(c => c.Value.Value);
-                }
-
-                response = connection.Client.Get("counters/aggregrated/stats:succeeded");
-                if (response.StatusCode == HttpStatusCode.OK)
-                {
-                    Dictionary<string, Counter> collections = response.ResultAs<Dictionary<string, Counter>>();
-                    value += collections.Sum(c => c.Value.Value);
-                }
-
-                return new Dictionary<string, long>
-                {
-                    { "stats:succeeded", value }
-                };
-            });
-            tasks.Add(successCounters);
+                Dictionary<string, bool> collections = response.ResultAs<Dictionary<string, bool>>();
+                results.Add("Servers", collections.LongCount());
+            }
 
             // get sum of stats:deleted counters / aggregatedcounter 
-            Task<Dictionary<string, long>> deletedCounters = Task.Run(() =>
+            response = connection.Client.Get("counters/raw/stats:succeeded");
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
-                int value = 0;
-                FirebaseResponse response = connection.Client.Get("counters/raw/stats:deleted");
-                if (response.StatusCode == HttpStatusCode.OK)
-                {
-                    Dictionary<string, Counter> collections = response.ResultAs<Dictionary<string, Counter>>();
-                    value += collections.Sum(c => c.Value.Value);
-                }
+                Dictionary<string, Counter> collections = response.ResultAs<Dictionary<string, Counter>>();
+                count += collections.Sum(c => c.Value.Value);
+            }
 
-                response = connection.Client.Get("counters/aggregrated/stats:deleted");
-                if (response.StatusCode == HttpStatusCode.OK)
-                {
-                    Dictionary<string, Counter> collections = response.ResultAs<Dictionary<string, Counter>>();
-                    value += collections.Sum(c => c.Value.Value);
-                }
-
-                return new Dictionary<string, long>
-                {
-                    { "stats:deleted", value }
-                };
-            });
-            tasks.Add(deletedCounters);
-
-            // get counts of servers
-            Task<Dictionary<string, long>> recurringJobs = Task.Run(() =>
+            response = connection.Client.Get("counters/aggregrated/stats:succeeded");
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
-                QueryBuilder builder = QueryBuilder.New($@"equalTo=""recurring - jobs""");
-                builder.OrderBy("key");
-                FirebaseResponse response = connection.Client.Get("sets", builder);
-                if (response.StatusCode == HttpStatusCode.OK)
-                {
-                    Dictionary<string, Set> collections = response.ResultAs<Dictionary<string, Set>>();
-                    return new Dictionary<string, long>
-                    {
-                        { "recurring-jobs", collections.LongCount() }
-                    };
-                }
-                return new Dictionary<string, long>();
-            });
-            tasks.Add(recurringJobs);
+                Counter counter = response.ResultAs<Counter>();
+                count += counter.Value;
+            }
+            results.Add("stats:succeeded", count);
+
+            // get sum of stats:deleted counters / aggregatedcounter 
+            count = 0;
+            response = connection.Client.Get("counters/raw/stats:deleted");
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
+            {
+                Dictionary<string, Counter> collections = response.ResultAs<Dictionary<string, Counter>>();
+                count += collections.Sum(c => c.Value.Value);
+            }
+
+            response = connection.Client.Get("counters/aggregrated/stats:deleted");
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
+            {
+                Counter counter = response.ResultAs<Counter>();
+                count += counter.Value;
+            }
+            results.Add("stats:deleted", count);
 
             // get recurring-jobs count from sets
-            Task.WaitAll(tasks.ToArray());
-            Dictionary<string, long> results = tasks.Where(t => t.IsCompleted).SelectMany(t => t.Result).ToDictionary(t => t.Key, t => t.Value);
-            Func<string, long> getValueOrDefault = (key) => results.Where(r => r.Key == key).Select(r => r.Value).SingleOrDefault();
+            builder = QueryBuilder.New($@"equalTo=""recurring-jobs""");
+            builder.OrderBy("key");
+            response = connection.Client.Get("sets", builder);
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
+            {
+                Dictionary<string, Set> collections = response.ResultAs<Dictionary<string, Set>>();
+                results.Add("recurring-jobs", collections.LongCount());
+            }
 
             return new StatisticsDto
             {
@@ -243,49 +193,37 @@ namespace Hangfire.Firebase
 
         public JobList<EnqueuedJobDto> EnqueuedJobs(string queue, int @from, int perPage)
         {
-            return GetJobs(queue, @from, perPage, (job) =>
+            return GetJobsOnQueue(queue, @from, perPage, (state, job) => new EnqueuedJobDto
             {
-                InvocationData invocationData = job.InvocationData;
-                invocationData.Arguments = job.Arguments;
-
-                return new EnqueuedJobDto
-                {
-                    Job = invocationData.Deserialize(),
-                    State = job.StateName
-                };
+                Job = job,
+                State = state
             });
         }
 
         public JobList<FetchedJobDto> FetchedJobs(string queue, int @from, int perPage)
         {
-            return GetJobs(queue, @from, perPage, (job) =>
+            return GetJobsOnQueue(queue, @from, perPage, (state, job) => new FetchedJobDto
             {
-                InvocationData invocationData = job.InvocationData;
-                invocationData.Arguments = job.Arguments;
-
-                return new FetchedJobDto
-                {
-                    Job = invocationData.Deserialize(),
-                    State = job.StateName
-                };
+                Job = job,
+                State = state
             });
         }
 
         public JobList<ProcessingJobDto> ProcessingJobs(int @from, int count)
         {
-            return GetJobs(States.ProcessingState.StateName, @from, count, (state, invocationData) => new ProcessingJobDto
+            return GetJobsOnState(States.ProcessingState.StateName, @from, count, (state, job) => new ProcessingJobDto
             {
-                Job = invocationData.Deserialize(),
+                Job = job,
                 ServerId = state.Data.ContainsKey("ServerId") ? state.Data["ServerId"] : state.Data["ServerName"],
-                StartedAt = JobHelper.DeserializeDateTime(state.Data["StartedAt"]),
+                StartedAt = JobHelper.DeserializeDateTime(state.Data["StartedAt"])
             });
         }
 
         public JobList<ScheduledJobDto> ScheduledJobs(int @from, int count)
         {
-            return GetJobs(States.ScheduledState.StateName, @from, count, (state, invocationData) => new ScheduledJobDto
+            return GetJobsOnState(States.ScheduledState.StateName, @from, count, (state, job) => new ScheduledJobDto
             {
-                Job = invocationData.Deserialize(),
+                Job = job,
                 EnqueueAt = JobHelper.DeserializeDateTime(state.Data["EnqueueAt"]),
                 ScheduledAt = JobHelper.DeserializeDateTime(state.Data["ScheduledAt"])
             });
@@ -293,10 +231,10 @@ namespace Hangfire.Firebase
 
         public JobList<SucceededJobDto> SucceededJobs(int @from, int count)
         {
-            return GetJobs(States.SucceededState.StateName, @from, count, (state, invocationData) => new SucceededJobDto
+            return GetJobsOnState(States.SucceededState.StateName, @from, count, (state, job) => new SucceededJobDto
             {
-                Job = invocationData.Deserialize(),
-                Result = state.Data["result"],
+                Job = job,
+                Result = state.Data.ContainsKey("Result") ? state.Data["Result"] : null,
                 TotalDuration = state.Data.ContainsKey("PerformanceDuration") && state.Data.ContainsKey("Latency")
                                 ? (long?)long.Parse(state.Data["PerformanceDuration"]) + long.Parse(state.Data["Latency"])
                                 : null,
@@ -306,9 +244,9 @@ namespace Hangfire.Firebase
 
         public JobList<FailedJobDto> FailedJobs(int @from, int count)
         {
-            return GetJobs(States.FailedState.StateName, @from, count, (state, invocationData) => new FailedJobDto
+            return GetJobsOnState(States.FailedState.StateName, @from, count, (state, job) => new FailedJobDto
             {
-                Job = invocationData.Deserialize(),
+                Job = job,
                 Reason = state.Reason,
                 FailedAt = JobHelper.DeserializeNullableDateTime(state.Data["FailedAt"]),
                 ExceptionDetails = state.Data["ExceptionDetails"],
@@ -319,98 +257,70 @@ namespace Hangfire.Firebase
 
         public JobList<DeletedJobDto> DeletedJobs(int @from, int count)
         {
-            return GetJobs(States.DeletedState.StateName, @from, count, (state, invocationData) => new DeletedJobDto
+            return GetJobsOnState(States.DeletedState.StateName, @from, count, (state, job) => new DeletedJobDto
             {
-                Job = invocationData.Deserialize(),
+                Job = job,
                 DeletedAt = JobHelper.DeserializeNullableDateTime(state.Data["DeletedAt"])
             });
         }
 
-        private JobList<T> GetJobs<T>(string stateName, int @from, int count, Func<State, InvocationData, T> selector)
+        private JobList<T> GetJobsOnState<T>(string stateName, int @from, int count, Func<State, Common.Job, T> selector)
         {
             List<KeyValuePair<string, T>> jobs = new List<KeyValuePair<string, T>>();
+
             QueryBuilder builder = QueryBuilder.New($@"equalTo=""{stateName}""");
             builder.OrderBy("state_name");
-
             FirebaseResponse response = connection.Client.Get("jobs", builder);
-            if (response.StatusCode == HttpStatusCode.OK)
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, Entities.Job> collections = response.ResultAs<Dictionary<string, Entities.Job>>();
-                string[] references = collections?.Skip(@from).Take(count).Select(k => k.Key).ToArray();
-
-                if (references != null && references.Length > 0)
+                string[] references = collections.Skip(@from).Take(count).Select(k => k.Key).ToArray();
+                Parallel.ForEach(references, reference =>
                 {
-                    List<Task<KeyValuePair<string, T>>> tasks = new List<Task<KeyValuePair<string, T>>>();
-                    Array.ForEach(references, reference =>
+                    Entities.Job job;
+                    if (collections.TryGetValue(reference, out job))
                     {
-                        Entities.Job job;
-                        if (collections.TryGetValue(reference, out job))
+                        FirebaseResponse stateResponse = connection.Client.Get($"states/{reference}/{job.StateId}");
+                        if (stateResponse.StatusCode == HttpStatusCode.OK && !stateResponse.IsNull())
                         {
-                            Task<KeyValuePair<string, T>> task = Task.Run(() =>
-                            {
-                                FirebaseResponse stateResponse = connection.Client.Get($"states/{reference}/{job.StateId}");
-                                if (stateResponse.StatusCode == HttpStatusCode.OK)
-                                {
-                                    State state = stateResponse.ResultAs<State>();
-                                    InvocationData invocationData = job.InvocationData;
-                                    invocationData.Arguments = job.Arguments;
+                            State state = stateResponse.ResultAs<State>();
+                            state.Data = state.Data.Trasnform();
 
-                                    T data = selector(state, invocationData);
-                                    if (data != null)
-                                    {
-                                        return new KeyValuePair<string, T>(reference, data);
-                                    }
-                                }
-                                return default(KeyValuePair<string, T>);
-                            });
-                            tasks.Add(task);
+                            InvocationData invocationData = job.InvocationData;
+                            invocationData.Arguments = job.Arguments;
+
+                            T data = selector(state, invocationData.Deserialize());
+                            jobs.Add(new KeyValuePair<string, T>(reference, data));
                         }
-                    });
-
-                    Task.WaitAll(tasks.ToArray());
-                    jobs = tasks.Where(t => !t.Result.Equals(default(KeyValuePair<string, T>))).Select(t => t.Result).ToList();
-                }
+                    }
+                });
             }
 
             return new JobList<T>(jobs);
         }
 
-        private JobList<T> GetJobs<T>(string queue, int @from, int count, Func<Entities.Job, T> selector)
+        private JobList<T> GetJobsOnQueue<T>(string queue, int @from, int count, Func<string, Common.Job, T> selector)
         {
             List<KeyValuePair<string, T>> jobs = new List<KeyValuePair<string, T>>();
 
-            FirebaseResponse response = connection.Client.Get($"queue/${queue}");
-            if (response.StatusCode == HttpStatusCode.OK)
+            FirebaseResponse response = connection.Client.Get($"queue/{queue}");
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, string> collection = response.ResultAs<Dictionary<string, string>>();
-                string[] references = collection?.Skip(@from - 1).Take(count).Select(k => k.Value).ToArray();
-
-                if (references != null && references.Length > 0)
+                string[] references = collection.Skip(@from).Take(count).Select(k => k.Value).ToArray();
+                Parallel.ForEach(references, reference =>
                 {
-                    List<Task<KeyValuePair<string, T>>> tasks = new List<Task<KeyValuePair<string, T>>>();
-                    Array.ForEach(references, reference =>
+                    FirebaseResponse jobResponse = connection.Client.Get($"jobs/{reference}");
+                    if (jobResponse.StatusCode == HttpStatusCode.OK && !jobResponse.IsNull())
                     {
-                        Task<KeyValuePair<string, T>> task = Task.Run(() =>
-                        {
-                            FirebaseResponse jobResponse = connection.Client.Get($"jobs/{reference}");
-                            if (jobResponse.StatusCode == HttpStatusCode.OK)
-                            {
-                                Entities.Job job = jobResponse.ResultAs<Entities.Job>();
-                                T data = selector(job);
-                                if (data != null)
-                                {
-                                    return new KeyValuePair<string, T>(reference, data);
-                                }
-                            }
-                            return default(KeyValuePair<string, T>);
-                        });
-                        tasks.Add(task);
+                        Entities.Job job = jobResponse.ResultAs<Entities.Job>();
+                        InvocationData invocationData = job.InvocationData;
+                        invocationData.Arguments = job.Arguments;
 
-                    });
-
-                    Task.WaitAll(tasks.ToArray());
-                    jobs = tasks.Where(t => !t.Result.Equals(default(KeyValuePair<string, T>))).Select(t => t.Result).ToList();
-                }
+                        T data = selector(job.StateName, invocationData.Deserialize());
+                        jobs.Add(new KeyValuePair<string, T>(reference, data));
+                    }
+                });
             }
 
             return new JobList<T>(jobs);
@@ -420,8 +330,6 @@ namespace Hangfire.Firebase
 
         #region Counts
 
-        public long ScheduledCount() => GetNumberOfJobsByStateName(States.ScheduledState.StateName);
-
         public long EnqueuedCount(string queue)
         {
             IPersistentJobQueueProvider provider = storage.QueueProviders.GetProvider(queue);
@@ -429,12 +337,9 @@ namespace Hangfire.Firebase
             return monitoringApi.GetEnqueuedCount(queue);
         }
 
-        public long FetchedCount(string queue)
-        {
-            IPersistentJobQueueProvider provider = storage.QueueProviders.GetProvider(queue);
-            IPersistentJobQueueMonitoringApi monitoringApi = provider.GetJobQueueMonitoringApi();
-            return monitoringApi.GetEnqueuedCount(queue);
-        }
+        public long FetchedCount(string queue) => EnqueuedCount(queue);
+
+        public long ScheduledCount() => GetNumberOfJobsByStateName(States.ScheduledState.StateName);
 
         public long FailedCount() => GetNumberOfJobsByStateName(States.FailedState.StateName);
 
@@ -448,12 +353,10 @@ namespace Hangfire.Firebase
         {
             QueryBuilder builder = QueryBuilder.New($@"equalTo=""{state}""");
             builder.OrderBy("state_name");
-            builder.Shallow(true);
-
             FirebaseResponse response = connection.Client.Get("jobs", builder);
-            if (response.StatusCode == HttpStatusCode.OK)
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
-                Dictionary<string, bool> jobs = response.ResultAs<Dictionary<string, bool>>();
+                Dictionary<string, Entities.Job> jobs = response.ResultAs<Dictionary<string, Entities.Job>>();
                 return jobs.LongCount();
             }
 
@@ -484,17 +387,21 @@ namespace Hangfire.Firebase
 
         private Dictionary<DateTime, long> GetTimelineStats(Dictionary<string, DateTime> keys)
         {
-            Dictionary<DateTime, long> result = new Dictionary<DateTime, long>();
-            Parallel.ForEach(keys.Keys, key =>
+            Dictionary<DateTime, long> result = keys.ToDictionary(k => k.Value, v => default(long));
+
+            FirebaseResponse response = connection.Client.Get($"counters/aggregrated");
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
-                FirebaseResponse response = connection.Client.Get($"counters/aggregrated/{key}");
-                if (response.StatusCode == HttpStatusCode.OK)
+                Dictionary<string, Counter> collections = response.ResultAs<Dictionary<string, Counter>>();
+                Dictionary<string, int> data = collections.Where(k => keys.ContainsKey(k.Key)).ToDictionary(k => k.Key, k => k.Value.Value);
+
+                foreach (string key in keys.Keys)
                 {
-                    Counter counter = response.ResultAs<Counter>();
                     DateTime date = keys.Where(k => k.Key == key).Select(k => k.Value).First();
-                    result.Add(date, counter.Value);
+                    result[date] = data.ContainsKey(key) ? data[key] : 0;
                 }
-            });
+            }
+
             return result;
         }
 
