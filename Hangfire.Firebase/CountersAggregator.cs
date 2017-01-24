@@ -1,14 +1,13 @@
-﻿using FireSharp.Response;
-using Hangfire.Firebase.Entities;
+﻿using System;
+using System.Net;
+using System.Linq;
+using System.Threading;
+using System.Collections.Generic;
+
 using Hangfire.Logging;
 using Hangfire.Server;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
+using FireSharp.Response;
+using Hangfire.Firebase.Entities;
 
 namespace Hangfire.Firebase
 {
@@ -26,7 +25,7 @@ namespace Hangfire.Firebase
         {
             if (storage == null) throw new ArgumentNullException(nameof(storage));
 
-            this.connection = (FirebaseConnection)storage.GetConnection();
+            connection = (FirebaseConnection)storage.GetConnection();
             this.checkInterval = checkInterval;
         }
 
@@ -58,14 +57,12 @@ namespace Hangfire.Firebase
                             };
 
                             FirebaseResponse counterResponse = connection.Client.Get($"counters/aggregrated/{key}");
-                            if (response.StatusCode == HttpStatusCode.OK && !counterResponse.IsNull())
+                            if (counterResponse.StatusCode == HttpStatusCode.OK && !counterResponse.IsNull())
                             {
-                                Dictionary<string, Counter> collections = response.ResultAs<Dictionary<string, Counter>>();
-                                if (collections != null)
+                                Counter counter = counterResponse.ResultAs<Counter>();
+                                if (counter != null)
                                 {
-                                    aggregated = collections.Values.FirstOrDefault();
-                                    aggregated.Value += value;
-                                    aggregated.ExpireOn = expireOn;
+                                    aggregated.Value += counter.Value;
                                 }
                             }
 
@@ -74,17 +71,15 @@ namespace Hangfire.Firebase
                             if (aggResponse.StatusCode == HttpStatusCode.OK)
                             {
                                 // delete all the counter references for the key
-                                Parallel.ForEach(data.Keys, reference => connection.Client.Delete($"counters/raw/{key}/{reference}"));
+                                Array.ForEach(data.Keys.ToArray(), reference => connection.Client.Delete($"counters/raw/{key}/{reference}"));
                             }
                         }
                     });
-
-                    cancellationToken.WaitHandle.WaitOne(checkInterval);
                 }
-
-                Logger.Trace("Records from the 'Counter' table aggregated.");
-                cancellationToken.ThrowIfCancellationRequested();
             }
+
+            Logger.Trace("Records from the 'Counter' table aggregated.");
+            cancellationToken.WaitHandle.WaitOne(checkInterval);
         }
 
         public override string ToString() => GetType().ToString();
