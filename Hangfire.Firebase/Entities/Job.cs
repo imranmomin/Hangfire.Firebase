@@ -3,12 +3,13 @@ using Hangfire.Storage;
 
 namespace Hangfire.Firebase.Entities
 {
-    internal class Job : FireEntity, IExpireEntity
+    internal class Job : FireEntity
     {
         public InvocationData InvocationData { get; set; }
         public string Arguments { get; set; }
         public string StateId { get; set; }
         public string StateName { get; set; }
+        public Parameter[] Parameters { get; set; }
         public DateTime CreatedOn { get; set; }
     }
 }
