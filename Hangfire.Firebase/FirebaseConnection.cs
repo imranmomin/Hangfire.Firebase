@@ -46,39 +46,21 @@ namespace Hangfire.Firebase
                 InvocationData = invocationData,
                 Arguments = invocationData.Arguments,
                 CreatedOn = createdAt,
-                ExpireOn = createdAt.Add(expireIn)
+                ExpireOn = createdAt.Add(expireIn),
+
+                Parameters = parameters.Select(p => new Parameter
+                {
+                    Name = p.Key,
+                    Value = p.Value
+                }).ToArray()
             });
 
             if (response.StatusCode == HttpStatusCode.OK)
             {
-                string reference = response.Result.name;
-                if (parameters.Count > 0)
-                {
-                    List<Parameter> jobParameters = parameters.Select(parameter => new Parameter
-                    {
-                        Name = parameter.Key,
-                        Value = parameter.Value
-                    }).ToList();
-
-                    List<Task<PushResponse>> tasks = new List<Task<PushResponse>>();
-                    jobParameters.ForEach(parameter =>
-                    {
-                        Task<PushResponse> task = Task.Run(() => Client.Push($"jobs/{reference}/parameters", parameter));
-                        tasks.Add(task);
-                    });
-                    Task.WaitAll(tasks.ToArray());
-
-                    bool isFailed = tasks.Any(t => t.Result.StatusCode != HttpStatusCode.OK);
-                    if (isFailed)
-                    {
-                        string body = string.Join("; ", tasks.Where(t => t.Result.StatusCode != HttpStatusCode.OK).Select(t => t.Result.Body));
-                        throw new HttpRequestException(body);
-                    }
-                }
-                return reference;
+                return response.Result.name;
             }
 
-            return null;
+            return string.Empty;
         }
 
         public override IFetchedJob FetchNextJob(string[] queues, CancellationToken cancellationToken)
@@ -104,7 +86,7 @@ namespace Hangfire.Firebase
             if (jobId == null) throw new ArgumentNullException(nameof(jobId));
 
             FirebaseResponse response = Client.Get($"jobs/{jobId}");
-            if (response.StatusCode == HttpStatusCode.OK)
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Entities.Job data = response.ResultAs<Entities.Job>();
                 InvocationData invocationData = data.InvocationData;
@@ -139,25 +121,19 @@ namespace Hangfire.Firebase
             if (jobId == null) throw new ArgumentNullException(nameof(jobId));
 
             FirebaseResponse response = Client.Get($"jobs/{jobId}");
-            if (response.StatusCode == HttpStatusCode.OK)
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Entities.Job job = response.ResultAs<Entities.Job>();
-                if (job != null)
+                response = Client.Get($"states/{jobId}/{job.StateId}");
+                if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
                 {
-                    response = Client.Get($"states/{jobId}/{job.StateId}");
-                    if (response.StatusCode == HttpStatusCode.OK)
+                    State data = response.ResultAs<State>();
+                    return new StateData
                     {
-                        State data = response.ResultAs<State>();
-                        if (data != null)
-                        {
-                            return new StateData
-                            {
-                                Name = data.Name,
-                                Reason = data.Reason,
-                                Data = data.Data
-                            };
-                        }
-                    }
+                        Name = data.Name,
+                        Reason = data.Reason,
+                        Data = data.Data.Trasnform()
+                    };
                 }
             }
 
@@ -173,11 +149,12 @@ namespace Hangfire.Firebase
             if (id == null) throw new ArgumentNullException(nameof(id));
             if (name == null) throw new ArgumentNullException(nameof(name));
 
-            FirebaseResponse response = Client.Get($"jobs/{id}/parameters");
-            if (response.StatusCode == HttpStatusCode.OK)
+            FirebaseResponse response = Client.Get($"jobs/{id}/parameter");
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
-                Dictionary<string, Parameter> parameters = response.ResultAs<Dictionary<string, Parameter>>();
-                return parameters?.Select(p => p.Value).Where(p => p.Name == name).Select(p => p.Value).FirstOrDefault();
+                Parameter[] parameters = response.ResultAs<Parameter[]>();
+                return parameters.Where(p => p.Name == name)
+                                 .Select(p => p.Value).FirstOrDefault();
             }
 
             return null;
@@ -188,37 +165,20 @@ namespace Hangfire.Firebase
             if (id == null) throw new ArgumentNullException(nameof(id));
             if (name == null) throw new ArgumentNullException(nameof(name));
 
-            bool isExsits = false;
+            Parameter parameter = new Parameter
+            {
+                Name = name,
+                Value = value
+            };
+
             FirebaseResponse response = Client.Get($"jobs/{id}/parameters");
             if (response.StatusCode == HttpStatusCode.OK)
             {
-                Dictionary<string, Parameter> parameters = response.ResultAs<Dictionary<string, Parameter>>();
-                string parameterReference = parameters?.Where(p => p.Value.Name == name).Select(p => p.Key).FirstOrDefault();
-                if (!string.IsNullOrEmpty(parameterReference))
-                {
-                    isExsits = true;
-                    response = Client.Set($"jobs/{id}/parameters/{parameterReference}/value", value);
-                    if (response.StatusCode != HttpStatusCode.OK)
-                    {
-                        throw new HttpRequestException(response.Body);
-                    }
-                }
-            }
+                Parameter[] parameters = response.ResultAs<Parameter[]>();
+                int index = parameters.Where(p => p.Name == name).Select((p, i) => i + 1).FirstOrDefault();
 
-            // new parameter
-            if (!isExsits)
-            {
-                Parameter parameter = new Parameter
-                {
-                    Name = name,
-                    Value = value
-                };
-
-                response = Client.Push($"jobs/{id}/parameters", parameter);
-                if (response.StatusCode != HttpStatusCode.OK)
-                {
-                    throw new HttpRequestException(response.Body);
-                }
+                response = index == 0 ? (FirebaseResponse)Client.Set($"jobs/{id}/parameters/{index}/value", value)
+                                      : (FirebaseResponse)Client.Set($"jobs/{id}/parameters/{parameters.Length}", parameter);
             }
         }
 
@@ -226,22 +186,98 @@ namespace Hangfire.Firebase
 
         #region Set
 
+        public override TimeSpan GetSetTtl(string key)
+        {
+            if (key == null) throw new ArgumentNullException(nameof(key));
+
+            QueryBuilder builder = QueryBuilder.New($@"equalTo=""{key}""");
+            builder.OrderBy("key");
+            FirebaseResponse response = Client.Get("sets", builder);
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
+            {
+                Dictionary<string, Set> collections = response.ResultAs<Dictionary<string, Set>>();
+                DateTime? expireOn = collections.Select(c => c.Value).Min(s => s.ExpireOn);
+                if (expireOn.HasValue)
+                {
+                    return expireOn.Value - DateTime.UtcNow;
+                }
+            }
+
+            return TimeSpan.FromSeconds(-1);
+        }
+
+        public override List<string> GetRangeFromSet(string key, int startingFrom, int endingAt)
+        {
+            if (key == null) throw new ArgumentNullException(nameof(key));
+
+            QueryBuilder builder = QueryBuilder.New($@"equalTo=""{key}""");
+            builder.OrderBy("key");
+            FirebaseResponse response = Client.Get("sets", builder);
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
+            {
+                Dictionary<string, Set> collections = response.ResultAs<Dictionary<string, Set>>();
+                return collections.Skip(startingFrom).Take(endingAt).Select(c => c.Value).Select(s => s.Value).ToList();
+            }
+
+            return new List<string>();
+        }
+
+        public override long GetCounter(string key)
+        {
+            if (key == null) throw new ArgumentNullException(nameof(key));
+
+            long value = 0;
+            FirebaseResponse response = Client.Get($"counters/raw/{key}");
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
+            {
+                Dictionary<string, Counter> collections = response.ResultAs<Dictionary<string, Counter>>();
+                value += collections.Sum(c => c.Value.Value);
+            }
+
+            response = Client.Get($"counters/aggregrated/{key}");
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
+            {
+                Dictionary<string, Counter> collections = response.ResultAs<Dictionary<string, Counter>>();
+                value += collections.Sum(c => c.Value.Value);
+            }
+
+            return value;
+        }
+
+        public override long GetSetCount(string key)
+        {
+            if (key == null) throw new ArgumentNullException(nameof(key));
+
+            QueryBuilder builder = QueryBuilder.New($@"equalTo=""{key}""");
+            builder.OrderBy("key");
+            FirebaseResponse response = Client.Get("sets", builder);
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
+            {
+                Dictionary<string, Set> collections = response.ResultAs<Dictionary<string, Set>>();
+                return collections.LongCount();
+            }
+
+            return default(long);
+        }
+
         public override HashSet<string> GetAllItemsFromSet(string key)
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            FirebaseResponse response = Client.Get($"sets");
-            if (response.StatusCode == HttpStatusCode.OK)
+            QueryBuilder builder = QueryBuilder.New($@"equalTo=""{key}""");
+            builder.OrderBy("key");
+            FirebaseResponse response = Client.Get($"sets", builder);
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, Set> sets = response.ResultAs<Dictionary<string, Set>>();
-                List<string> data = sets?.Where(s => s.Value.Key == key).Select(s => s.Value.Value).ToList();
+                List<string> data = sets.Select(s => s.Value.Value).ToList();
                 if (data != null)
                 {
                     return new HashSet<string>(data);
                 }
             }
 
-            return null;
+            return new HashSet<string>();
         }
 
         public override string GetFirstByLowestScoreFromSet(string key, double fromScore, double toScore)
@@ -249,18 +285,19 @@ namespace Hangfire.Firebase
             if (key == null) throw new ArgumentNullException(nameof(key));
             if (toScore < fromScore) throw new ArgumentException("The `toScore` value must be higher or equal to the `fromScore` value.");
 
-            FirebaseResponse response = Client.Get($"sets");
-            if (response.StatusCode == HttpStatusCode.OK)
+            QueryBuilder builder = QueryBuilder.New($@"equalTo=""{key}""");
+            builder.OrderBy("key");
+            FirebaseResponse response = Client.Get("sets", builder);
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, Set> sets = response.ResultAs<Dictionary<string, Set>>();
-                return sets?.Where(s => s.Value.Key == key && s.Value.Score >= fromScore && s.Value.Score <= toScore)
-                            .Select(s => s.Value)
-                            .OrderBy(s => s.Score)
-                            .Take(1)
-                            .Select(s => s.Value).FirstOrDefault();
+                return sets.Select(s => s.Value)
+                           .OrderBy(s => s.Score)
+                           .Where(s => s.Score >= fromScore && s.Score <= toScore)
+                           .Select(s => s.Value).FirstOrDefault();
             }
 
-            return null;
+            return string.Empty;
         }
 
         #endregion
@@ -273,22 +310,21 @@ namespace Hangfire.Firebase
             if (context == null) throw new ArgumentNullException(nameof(context));
 
             QueryBuilder builder = QueryBuilder.New($@"equalTo=""{serverId}""");
-            builder.OrderBy("_id");
-
+            builder.OrderBy("server_id");
             FirebaseResponse response = Client.Get("servers", builder);
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Dictionary<string, Entities.Server> servers = response.ResultAs<Dictionary<string, Entities.Server>>();
-                string serverReferenceKey = servers?.Where(s => s.Value.Id == serverId).Select(s => s.Key).FirstOrDefault();
-                Entities.Server server;
+                string reference = servers?.Where(s => s.Value.ServerId == serverId).Select(s => s.Key).FirstOrDefault();
 
-                if (!string.IsNullOrEmpty(serverReferenceKey) && servers.TryGetValue(serverReferenceKey, out server))
+                Entities.Server server;
+                if (!string.IsNullOrEmpty(reference) && servers.TryGetValue(reference, out server))
                 {
                     server.LastHeartbeat = DateTime.UtcNow;
                     server.Workers = context.WorkerCount;
                     server.Queues = context.Queues;
 
-                    response = Client.Set($"servers/{serverReferenceKey}", server);
+                    response = Client.Set($"servers/{reference}", server);
                     if (response.StatusCode != HttpStatusCode.OK)
                     {
                         throw new HttpRequestException(response.Body);
@@ -298,7 +334,7 @@ namespace Hangfire.Firebase
                 {
                     server = new Entities.Server
                     {
-                        Id = serverId,
+                        ServerId = serverId,
                         Workers = context.WorkerCount,
                         Queues = context.Queues,
                         CreatedOn = DateTime.UtcNow,
@@ -319,22 +355,18 @@ namespace Hangfire.Firebase
             if (serverId == null) throw new ArgumentNullException(nameof(serverId));
 
             QueryBuilder builder = QueryBuilder.New($@"equalTo=""{serverId}""");
-            builder.OrderBy("_id");
-
+            builder.OrderBy("server_id");
             FirebaseResponse response = Client.Get("servers", builder);
-            if (response.StatusCode == HttpStatusCode.OK)
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, Entities.Server> servers = response.ResultAs<Dictionary<string, Entities.Server>>();
-                string serverReferenceKey = servers?.Where(s => s.Value.Id == serverId).Select(s => s.Key).FirstOrDefault();
-                Entities.Server server;
-
-                if (!string.IsNullOrEmpty(serverReferenceKey) && servers.TryGetValue(serverReferenceKey, out server))
+                string reference = servers.Where(s => s.Value.ServerId == serverId).Select(s => s.Key).FirstOrDefault();
+                if (!string.IsNullOrEmpty(reference))
                 {
-                    server.LastHeartbeat = DateTime.UtcNow;
-                    SetResponse setResponse = Client.Set($"servers/{serverReferenceKey}", server);
-                    if (setResponse.StatusCode != HttpStatusCode.OK)
+                    response = Client.Set($"servers/{reference}/last_heartbeat", DateTime.UtcNow);
+                    if (response.StatusCode != HttpStatusCode.OK)
                     {
-                        throw new HttpRequestException(setResponse.Body);
+                        throw new HttpRequestException(response.Body);
                     }
                 }
             }
@@ -345,16 +377,15 @@ namespace Hangfire.Firebase
             if (serverId == null) throw new ArgumentNullException(nameof(serverId));
 
             QueryBuilder builder = QueryBuilder.New($@"equalTo=""{serverId}""");
-            builder.OrderBy("_id");
-
+            builder.OrderBy("server_id");
             FirebaseResponse response = Client.Get("servers", builder);
-            if (response.StatusCode == HttpStatusCode.OK)
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, Entities.Server> servers = response.ResultAs<Dictionary<string, Entities.Server>>();
-                string serverReference = servers?.Where(s => s.Value.Id == serverId).Select(s => s.Key).Single();
-                if (!string.IsNullOrEmpty(serverReference))
+                string reference = servers.Where(s => s.Value.ServerId == serverId).Select(s => s.Key).Single();
+                if (!string.IsNullOrEmpty(reference))
                 {
-                    Client.Delete($"servers/{serverReference}");
+                    Client.Delete($"servers/{reference}");
                 }
             }
         }
@@ -367,23 +398,21 @@ namespace Hangfire.Firebase
             }
 
             FirebaseResponse response = Client.Get("servers");
-            if (response.StatusCode == HttpStatusCode.OK)
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, Entities.Server> servers = response.ResultAs<Dictionary<string, Entities.Server>>();
 
                 // get the firebase reference key for each timeout server
                 DateTime lastHeartbeat = DateTime.UtcNow.Add(timeOut.Negate());
-                string[] timeoutServers = servers?.Where(s => s.Value.LastHeartbeat < lastHeartbeat)
-                                                  .Select(s => s.Key)
-                                                  .ToArray();
-                if (timeoutServers != null)
-                {
-                    // remove all timeout server.
-                    Array.ForEach(timeoutServers, server => Client.Delete($"servers/{server}"));
-                    return timeoutServers.Length;
-                }
-                return default(int);
+                string[] references = servers.Where(s => s.Value.LastHeartbeat < lastHeartbeat)
+                                             .Select(s => s.Key)
+                                             .ToArray();
+
+                // remove all timeout server.
+                Array.ForEach(references, reference => Client.Delete($"servers/{reference}"));
+                return references.Length;
             }
+
             return default(int);
         }
 
@@ -396,13 +425,13 @@ namespace Hangfire.Firebase
             if (key == null) throw new ArgumentNullException(nameof(key));
 
             FirebaseResponse response = Client.Get($"hashes/{key}");
-            if (response.StatusCode == HttpStatusCode.OK)
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, Hash> hashes = response.ResultAs<Dictionary<string, Hash>>();
-                return hashes?.Select(h => h.Value).ToDictionary(h => h.Field, h => h.Value);
+                return hashes.Select(h => h.Value).ToDictionary(h => h.Field, h => h.Value);
             }
 
-            return null;
+            return new Dictionary<string, string>();
         }
 
         public override void SetRangeInHash(string key, IEnumerable<KeyValuePair<string, string>> keyValuePairs)
@@ -410,7 +439,6 @@ namespace Hangfire.Firebase
             if (key == null) throw new ArgumentNullException(nameof(key));
             if (keyValuePairs == null) throw new ArgumentNullException(nameof(keyValuePairs));
 
-            List<Task<FirebaseResponse>> tasks = new List<Task<FirebaseResponse>>();
             List<Hash> hashes = keyValuePairs.Select(k => new Hash
             {
                 Field = k.Key,
@@ -418,49 +446,29 @@ namespace Hangfire.Firebase
             }).ToList();
 
             FirebaseResponse response = Client.Get($"hashes/{key}");
-            if (response.StatusCode == HttpStatusCode.OK)
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, Hash> existingHashes = response.ResultAs<Dictionary<string, Hash>>();
-                string[] hashReferences = existingHashes?.Where(h => hashes.Any(k => k.Field == h.Value.Field))
-                                                         .Select(h => h.Key)
-                                                         .ToArray();
-                if (hashReferences != null)
+                string[] references = existingHashes.Where(h => hashes.Any(k => k.Field == h.Value.Field))
+                                                    .Select(h => h.Key)
+                                                    .ToArray();
+                // updates 
+                Parallel.ForEach(references, reference =>
                 {
-                    // updates 
-                    Array.ForEach(hashReferences, hashReference =>
+                    Hash hash;
+                    if (existingHashes.TryGetValue(reference, out hash) && hashes.Any(k => k.Field == hash.Field))
                     {
-                        Hash hash;
-                        if (existingHashes.TryGetValue(hashReference, out hash) && hashes.Any(k => k.Field == hash.Field))
-                        {
-                            string value = hashes.Where(k => k.Field == hash.Field).Select(k => k.Value).Single();
-                            Task<FirebaseResponse> task = Task.Run(() => (FirebaseResponse)Client.Set($"hashes/{key}/{hashReference}/value", value));
-                            tasks.Add(task);
+                        string value = hashes.Where(k => k.Field == hash.Field).Select(k => k.Value).Single();
+                        Client.Set($"hashes/{key}/{reference}/value", value);
 
-                            // remove the hash from the list
-                            hashes.RemoveAll(x => x.Field == hash.Field);
-                        }
-                    });
-                }
+                        // remove the hash from the list
+                        hashes.RemoveAll(x => x.Field == hash.Field);
+                    }
+                });
             }
 
             // new 
-            hashes.ForEach(hash =>
-            {
-                Task<FirebaseResponse> task = Task.Run(() => (FirebaseResponse)Client.Push($"hashes/{key}", hash));
-                tasks.Add(task);
-            });
-
-            if (tasks.Count > 0)
-            {
-                Task.WaitAll(tasks.ToArray());
-
-                bool isFailed = tasks.Any(t => t.Result.StatusCode != HttpStatusCode.OK);
-                if (isFailed)
-                {
-                    string body = string.Join("; ", tasks.Where(t => t.Result.StatusCode != HttpStatusCode.OK).Select(t => t.Result.Body));
-                    throw new HttpRequestException(body);
-                }
-            }
+            Parallel.ForEach(hashes, hash => Client.Push($"hashes/{key}", hash));
         }
 
         public override long GetHashCount(string key)
@@ -469,7 +477,7 @@ namespace Hangfire.Firebase
 
             QueryBuilder builder = QueryBuilder.New().Shallow(true);
             FirebaseResponse response = Client.Get($"hashes/{key}", builder);
-            if (response.StatusCode == HttpStatusCode.OK)
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 string[] hashes = response.ResultAs<string[]>();
                 return hashes.LongCount();
@@ -484,13 +492,13 @@ namespace Hangfire.Firebase
             if (name == null) throw new ArgumentNullException(nameof(name));
 
             FirebaseResponse response = Client.Get($"hashes/{key}");
-            if (response.StatusCode == HttpStatusCode.OK)
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, Hash> hashes = response.ResultAs<Dictionary<string, Hash>>();
-                return hashes?.Select(h => h.Value).Where(h => h.Field == name).Select(v => v.Value).FirstOrDefault();
+                return hashes.Select(h => h.Value).Where(h => h.Field == name).Select(v => v.Value).FirstOrDefault();
             }
 
-            return null;
+            return string.Empty;
         }
 
         public override TimeSpan GetHashTtl(string key)
@@ -498,10 +506,10 @@ namespace Hangfire.Firebase
             if (key == null) throw new ArgumentNullException(nameof(key));
 
             FirebaseResponse response = Client.Get($"hashes/{key}");
-            if (response.StatusCode == HttpStatusCode.OK)
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, Hash> hashes = response.ResultAs<Dictionary<string, Hash>>();
-                DateTime? expireOn = hashes?.Select(h => h.Value).Min(h => h.ExpireOn);
+                DateTime? expireOn = hashes.Select(h => h.Value).Min(h => h.ExpireOn);
                 if (expireOn.HasValue) return expireOn.Value - DateTime.UtcNow;
             }
 
@@ -517,13 +525,10 @@ namespace Hangfire.Firebase
             if (key == null) throw new ArgumentNullException(nameof(key));
 
             FirebaseResponse response = Client.Get($"lists/{key}");
-            if (response.StatusCode == HttpStatusCode.OK)
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, List> lists = response.ResultAs<Dictionary<string, List>>();
-                if (lists != null)
-                {
-                    return lists.Select(l => l.Value).Select(l => l.Value).ToList();
-                }
+                return lists.Select(l => l.Value).Select(l => l.Value).ToList();
             }
 
             return new List<string>();
@@ -534,16 +539,13 @@ namespace Hangfire.Firebase
             if (key == null) throw new ArgumentNullException(nameof(key));
 
             FirebaseResponse response = Client.Get($"lists/{key}");
-            if (response.StatusCode == HttpStatusCode.OK)
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, List> lists = response.ResultAs<Dictionary<string, List>>();
-                if (lists != null)
-                {
-                    return lists?.Select(l => l.Value)
-                                 .OrderBy(l => l.ExpireOn)
-                                 .Skip(startingFrom).Take(endingAt)
-                                 .Select(l => l.Value).ToList();
-                }
+                return lists.Select(l => l.Value)
+                            .OrderBy(l => l.ExpireOn)
+                            .Skip(startingFrom).Take(endingAt)
+                            .Select(l => l.Value).ToList();
             }
 
             return new List<string>();
@@ -554,10 +556,10 @@ namespace Hangfire.Firebase
             if (key == null) throw new ArgumentNullException(nameof(key));
 
             FirebaseResponse response = Client.Get($"lists/{key}");
-            if (response.StatusCode == HttpStatusCode.OK)
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, List> lists = response.ResultAs<Dictionary<string, List>>();
-                DateTime? expireOn = lists?.Select(l => l.Value).Min(l => l.ExpireOn);
+                DateTime? expireOn = lists.Select(l => l.Value).Min(l => l.ExpireOn);
                 if (expireOn.HasValue) return expireOn.Value - DateTime.UtcNow;
             }
 
@@ -570,13 +572,10 @@ namespace Hangfire.Firebase
 
             QueryBuilder builder = QueryBuilder.New().Shallow(true);
             FirebaseResponse response = Client.Get($"lists/{key}", builder);
-            if (response.StatusCode == HttpStatusCode.OK)
+            if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 string[] lists = response.ResultAs<string[]>();
-                if (lists != null)
-                {
-                    return lists.LongCount();
-                }
+                return lists.LongCount();
             }
 
             return default(long);
