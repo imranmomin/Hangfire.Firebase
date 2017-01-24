@@ -58,5 +58,7 @@ namespace Hangfire.Firebase
             logger.Info($"     Queue: {string.Join(",", Options.Queues)}");
         }
 
+        public override string ToString() => $"Firbase Database : {url}";
+
     }
 }
