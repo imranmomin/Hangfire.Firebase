@@ -29,20 +29,20 @@ namespace Hangfire.Firebase
 
             while (true)
             {
-                FirebaseResponse response = client.Get($"locks");
+                FirebaseResponse response = client.Get("locks");
                 if (response.StatusCode == System.Net.HttpStatusCode.OK)
                 {
                     Dictionary<string, Lock> locks = response.ResultAs<Dictionary<string, Lock>>();
                     string reference = locks?.Where(l => l.Value.Resource == resource).Select(l => l.Key).FirstOrDefault();
                     if (string.IsNullOrEmpty(reference))
                     {
-                        response = client.Push($"locks", new Lock { Resource = resource, ExpireOn = DateTime.UtcNow.Add(timeout) });
+                        response = client.Push("locks", new Lock { Resource = resource, ExpireOn = DateTime.UtcNow.Add(timeout) });
                         if (response.StatusCode == System.Net.HttpStatusCode.OK)
                         {
-                            string lockReference = ((PushResponse)response).Result.name;
-                            if (!string.IsNullOrEmpty(lockReference))
+                            reference = ((PushResponse)response).Result.name;
+                            if (!string.IsNullOrEmpty(reference))
                             {
-                                this.lockReference = lockReference;
+                                lockReference = reference;
                                 break;
                             }
                         }
@@ -54,10 +54,9 @@ namespace Hangfire.Firebase
                 {
                     throw new FirebaseDistributedLockException($"Could not place a lock on the resource '{resource}': Lock timeout.");
                 }
-                else
-                {
-                    System.Threading.Thread.Sleep(500); // sleep for 500 millisecond
-                }
+
+                // sleep for 500 millisecond
+                System.Threading.Thread.Sleep(500);
             }
         }
 
@@ -65,15 +64,12 @@ namespace Hangfire.Firebase
         {
             lock (syncLock)
             {
-                FirebaseResponse response = client.Get($"locks");
-                if (response.StatusCode == System.Net.HttpStatusCode.OK)
+                QueryBuilder builder = QueryBuilder.New($@"equalTo=""{lockReference}""");
+                builder.OrderBy("$key");
+                FirebaseResponse response = client.Get("locks", builder);
+                if (response.StatusCode == System.Net.HttpStatusCode.OK && !response.IsNull())
                 {
-                    Dictionary<string, Lock> locks = response.ResultAs<Dictionary<string, Lock>>();
-                    Lock @lock;
-                    if (locks != null && locks.TryGetValue(lockReference, out @lock))
-                    {
-                        response = client.Delete($"locks/{lockReference}");
-                    }
+                    client.Delete($"locks/{lockReference}");
                 }
             }
         }
