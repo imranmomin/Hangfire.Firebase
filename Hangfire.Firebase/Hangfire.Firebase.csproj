@@ -94,6 +94,7 @@
     <Compile Include="Entities\Set.cs" />
     <Compile Include="Entities\State.cs" />
     <Compile Include="ExpirationManager.cs" />
+    <Compile Include="Extension.cs" />
     <Compile Include="FirebaseConnection.cs" />
     <Compile Include="FirebaseDistributedLock.cs" />
     <Compile Include="FirebaseDistributedLockException.cs" />
