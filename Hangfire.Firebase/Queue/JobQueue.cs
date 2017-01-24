@@ -21,7 +21,7 @@ namespace Hangfire.Firebase.Queue
         public JobQueue(FirebaseStorage storage)
         {
             this.storage = storage;
-            this.connection = (FirebaseConnection)storage.GetConnection();
+            connection = (FirebaseConnection)storage.GetConnection();
         }
 
         public IFetchedJob Dequeue(string[] queues, CancellationToken cancellationToken)

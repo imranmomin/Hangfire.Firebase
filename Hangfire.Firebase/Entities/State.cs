@@ -18,8 +18,9 @@ namespace Hangfire.Firebase.Entities
 
         private static string ToProperCase(this string key)
         {
-            string[] keys = key.Split(new char[] { '_' }, StringSplitOptions.RemoveEmptyEntries)
-                               .Select(k => System.Threading.Thread.CurrentThread.CurrentCulture.TextInfo.ToTitleCase(k)).ToArray();
+            string[] keys = key.Split(new[] { '_' }, StringSplitOptions.RemoveEmptyEntries)
+                               .Select(k => System.Threading.Thread.CurrentThread.CurrentCulture.TextInfo.ToTitleCase(k))
+                               .ToArray();
             return string.Join(string.Empty, keys);
         }
     }

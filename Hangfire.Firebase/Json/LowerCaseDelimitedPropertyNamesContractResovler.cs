@@ -1,5 +1,4 @@
-﻿using System;
-using System.Linq;
+﻿using System.Linq;
 using System.Collections;
 using System.Globalization;
 
@@ -12,7 +11,8 @@ namespace Hangfire.Firebase.Json
         private readonly char _delimiter;
 
         public LowerCaseDelimitedPropertyNamesContractResovler() : this('_') { }
-        public LowerCaseDelimitedPropertyNamesContractResovler(char delimiter) : base()
+
+        private LowerCaseDelimitedPropertyNamesContractResovler(char delimiter)
         {
             _delimiter = delimiter;
         }

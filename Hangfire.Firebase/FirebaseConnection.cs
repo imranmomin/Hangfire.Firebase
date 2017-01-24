@@ -177,8 +177,8 @@ namespace Hangfire.Firebase
                 Parameter[] parameters = response.ResultAs<Parameter[]>();
                 int index = parameters.Where(p => p.Name == name).Select((p, i) => i + 1).FirstOrDefault();
 
-                response = index == 0 ? (FirebaseResponse)Client.Set($"jobs/{id}/parameters/{index}/value", value)
-                                      : (FirebaseResponse)Client.Set($"jobs/{id}/parameters/{parameters.Length}", parameter);
+                if (index > 0) Client.Set($"jobs/{id}/parameters/{index - 1}/value", value);
+                else Client.Set($"jobs/{id}/parameters/{parameters.Length}", parameter);
             }
         }
 
@@ -266,15 +266,12 @@ namespace Hangfire.Firebase
 
             QueryBuilder builder = QueryBuilder.New($@"equalTo=""{key}""");
             builder.OrderBy("key");
-            FirebaseResponse response = Client.Get($"sets", builder);
+            FirebaseResponse response = Client.Get("sets", builder);
             if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, Set> sets = response.ResultAs<Dictionary<string, Set>>();
                 List<string> data = sets.Select(s => s.Value.Value).ToList();
-                if (data != null)
-                {
-                    return new HashSet<string>(data);
-                }
+                return new HashSet<string>(data);
             }
 
             return new HashSet<string>();

@@ -26,7 +26,7 @@ namespace Hangfire.Firebase
         {
             if (storage == null) throw new ArgumentNullException(nameof(storage));
 
-            this.connection = (FirebaseConnection)storage.GetConnection();
+            connection = (FirebaseConnection)storage.GetConnection();
             this.checkInterval = checkInterval;
         }
 

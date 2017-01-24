@@ -17,15 +17,15 @@ namespace Hangfire.Firebase.Queue
             providers.Add(this.provider);
         }
 
-        public void Add(IPersistentJobQueueProvider provider, IEnumerable<string> queues)
+        public void Add(IPersistentJobQueueProvider queueProvider, IEnumerable<string> queues)
         {
-            if (provider == null) throw new ArgumentNullException(nameof(provider));
+            if (queueProvider == null) throw new ArgumentNullException(nameof(queueProvider));
             if (queues == null) throw new ArgumentNullException(nameof(queues));
 
-            providers.Add(provider);
+            providers.Add(queueProvider);
             foreach (string queue in queues)
             {
-                providersByQueue.Add(queue, provider);
+                providersByQueue.Add(queue, queueProvider);
             }
         }
 

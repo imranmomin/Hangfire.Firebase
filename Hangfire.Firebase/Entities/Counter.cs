@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Hangfire.Firebase.Entities
+﻿namespace Hangfire.Firebase.Entities
 {
     internal class Counter : FireEntity
     {

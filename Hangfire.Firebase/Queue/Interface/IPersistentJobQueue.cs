@@ -1,6 +1,5 @@
 ﻿using Hangfire.Storage;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace Hangfire.Firebase.Queue
 {

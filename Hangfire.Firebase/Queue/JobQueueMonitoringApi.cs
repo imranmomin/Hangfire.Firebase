@@ -1,10 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Net;
 using System.Linq;
-using System.Net;
-using System.Text;
-using System.Threading.Tasks;
-using FireSharp;
+using System.Collections.Generic;
+
 using FireSharp.Response;
 
 namespace Hangfire.Firebase.Queue
@@ -28,7 +25,7 @@ namespace Hangfire.Firebase.Queue
             if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, string> collection = response.ResultAs<Dictionary<string, string>>();
-                return collection.Count();
+                return collection.Count;
             }
             return default(int);
         }

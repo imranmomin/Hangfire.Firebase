@@ -106,12 +106,10 @@ namespace Hangfire.Firebase
         public StatisticsDto GetStatistics()
         {
             int count = 0;
-            FirebaseResponse response;
             Dictionary<string, long> results = new Dictionary<string, long>();
-            Func<string, long> getValueOrDefault = (key) => results.Where(r => r.Key == key).Select(r => r.Value).SingleOrDefault();
 
             // get counts of jobs groupby on state
-            response = connection.Client.Get("jobs");
+            FirebaseResponse response = connection.Client.Get("jobs");
             if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, Entities.Job> collections = response.ResultAs<Dictionary<string, Entities.Job>>();
@@ -166,7 +164,7 @@ namespace Hangfire.Firebase
             results.Add("stats:deleted", count);
 
             // get recurring-jobs count from sets
-            builder = QueryBuilder.New($@"equalTo=""recurring-jobs""");
+            builder = QueryBuilder.New(@"equalTo=""recurring-jobs""");
             builder.OrderBy("key");
             response = connection.Client.Get("sets", builder);
             if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
@@ -175,6 +173,7 @@ namespace Hangfire.Firebase
                 results.Add("recurring-jobs", collections.LongCount());
             }
 
+            Func<string, long> getValueOrDefault = (key) => results.Where(r => r.Key == key).Select(r => r.Value).SingleOrDefault();
             return new StatisticsDto
             {
                 Enqueued = getValueOrDefault("Enqueued"),
@@ -191,27 +190,27 @@ namespace Hangfire.Firebase
 
         #region Job List
 
-        public JobList<EnqueuedJobDto> EnqueuedJobs(string queue, int @from, int perPage)
+        public JobList<EnqueuedJobDto> EnqueuedJobs(string queue, int from, int perPage)
         {
-            return GetJobsOnQueue(queue, @from, perPage, (state, job) => new EnqueuedJobDto
+            return GetJobsOnQueue(queue, from, perPage, (state, job) => new EnqueuedJobDto
             {
                 Job = job,
                 State = state
             });
         }
 
-        public JobList<FetchedJobDto> FetchedJobs(string queue, int @from, int perPage)
+        public JobList<FetchedJobDto> FetchedJobs(string queue, int from, int perPage)
         {
-            return GetJobsOnQueue(queue, @from, perPage, (state, job) => new FetchedJobDto
+            return GetJobsOnQueue(queue, from, perPage, (state, job) => new FetchedJobDto
             {
                 Job = job,
                 State = state
             });
         }
 
-        public JobList<ProcessingJobDto> ProcessingJobs(int @from, int count)
+        public JobList<ProcessingJobDto> ProcessingJobs(int from, int count)
         {
-            return GetJobsOnState(States.ProcessingState.StateName, @from, count, (state, job) => new ProcessingJobDto
+            return GetJobsOnState(States.ProcessingState.StateName, from, count, (state, job) => new ProcessingJobDto
             {
                 Job = job,
                 ServerId = state.Data.ContainsKey("ServerId") ? state.Data["ServerId"] : state.Data["ServerName"],
@@ -219,9 +218,9 @@ namespace Hangfire.Firebase
             });
         }
 
-        public JobList<ScheduledJobDto> ScheduledJobs(int @from, int count)
+        public JobList<ScheduledJobDto> ScheduledJobs(int from, int count)
         {
-            return GetJobsOnState(States.ScheduledState.StateName, @from, count, (state, job) => new ScheduledJobDto
+            return GetJobsOnState(States.ScheduledState.StateName, from, count, (state, job) => new ScheduledJobDto
             {
                 Job = job,
                 EnqueueAt = JobHelper.DeserializeDateTime(state.Data["EnqueueAt"]),
@@ -229,9 +228,9 @@ namespace Hangfire.Firebase
             });
         }
 
-        public JobList<SucceededJobDto> SucceededJobs(int @from, int count)
+        public JobList<SucceededJobDto> SucceededJobs(int from, int count)
         {
-            return GetJobsOnState(States.SucceededState.StateName, @from, count, (state, job) => new SucceededJobDto
+            return GetJobsOnState(States.SucceededState.StateName, from, count, (state, job) => new SucceededJobDto
             {
                 Job = job,
                 Result = state.Data.ContainsKey("Result") ? state.Data["Result"] : null,
@@ -242,9 +241,9 @@ namespace Hangfire.Firebase
             });
         }
 
-        public JobList<FailedJobDto> FailedJobs(int @from, int count)
+        public JobList<FailedJobDto> FailedJobs(int from, int count)
         {
-            return GetJobsOnState(States.FailedState.StateName, @from, count, (state, job) => new FailedJobDto
+            return GetJobsOnState(States.FailedState.StateName, from, count, (state, job) => new FailedJobDto
             {
                 Job = job,
                 Reason = state.Reason,
@@ -255,16 +254,16 @@ namespace Hangfire.Firebase
             });
         }
 
-        public JobList<DeletedJobDto> DeletedJobs(int @from, int count)
+        public JobList<DeletedJobDto> DeletedJobs(int from, int count)
         {
-            return GetJobsOnState(States.DeletedState.StateName, @from, count, (state, job) => new DeletedJobDto
+            return GetJobsOnState(States.DeletedState.StateName, from, count, (state, job) => new DeletedJobDto
             {
                 Job = job,
                 DeletedAt = JobHelper.DeserializeNullableDateTime(state.Data["DeletedAt"])
             });
         }
 
-        private JobList<T> GetJobsOnState<T>(string stateName, int @from, int count, Func<State, Common.Job, T> selector)
+        private JobList<T> GetJobsOnState<T>(string stateName, int from, int count, Func<State, Common.Job, T> selector)
         {
             List<KeyValuePair<string, T>> jobs = new List<KeyValuePair<string, T>>();
 
@@ -274,7 +273,7 @@ namespace Hangfire.Firebase
             if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, Entities.Job> collections = response.ResultAs<Dictionary<string, Entities.Job>>();
-                string[] references = collections.Skip(@from).Take(count).Select(k => k.Key).ToArray();
+                string[] references = collections.Skip(from).Take(count).Select(k => k.Key).ToArray();
                 Parallel.ForEach(references, reference =>
                 {
                     Entities.Job job;
@@ -299,7 +298,7 @@ namespace Hangfire.Firebase
             return new JobList<T>(jobs);
         }
 
-        private JobList<T> GetJobsOnQueue<T>(string queue, int @from, int count, Func<string, Common.Job, T> selector)
+        private JobList<T> GetJobsOnQueue<T>(string queue, int from, int count, Func<string, Common.Job, T> selector)
         {
             List<KeyValuePair<string, T>> jobs = new List<KeyValuePair<string, T>>();
 
@@ -307,7 +306,7 @@ namespace Hangfire.Firebase
             if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, string> collection = response.ResultAs<Dictionary<string, string>>();
-                string[] references = collection.Skip(@from).Take(count).Select(k => k.Value).ToArray();
+                string[] references = collection.Skip(from).Take(count).Select(k => k.Value).ToArray();
                 Parallel.ForEach(references, reference =>
                 {
                     FirebaseResponse jobResponse = connection.Client.Get($"jobs/{reference}");
@@ -389,7 +388,7 @@ namespace Hangfire.Firebase
         {
             Dictionary<DateTime, long> result = keys.ToDictionary(k => k.Value, v => default(long));
 
-            FirebaseResponse response = connection.Client.Get($"counters/aggregrated");
+            FirebaseResponse response = connection.Client.Get("counters/aggregrated");
             if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, Counter> collections = response.ResultAs<Dictionary<string, Counter>>();

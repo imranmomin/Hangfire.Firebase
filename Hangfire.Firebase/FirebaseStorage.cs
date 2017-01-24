@@ -16,8 +16,8 @@ namespace Hangfire.Firebase
         private readonly string url;
         private readonly IFirebaseConfig config;
 
-        public FirebaseStorageOptions Options { get; private set; }
-        public PersistentJobQueueProviderCollection QueueProviders { get; private set; }
+        public FirebaseStorageOptions Options { get; }
+        public PersistentJobQueueProviderCollection QueueProviders { get; }
 
         public FirebaseStorage(string url, string authSecret) : this(url, authSecret, new FirebaseStorageOptions()) { }
 
@@ -47,7 +47,7 @@ namespace Hangfire.Firebase
 #pragma warning restore 618
         {
             yield return new ExpirationManager(this, TimeSpan.FromMinutes(5));
-            yield return new CountersAggregator(this, TimeSpan.FromMinutes(5));
+            yield return new CountersAggregator(this, TimeSpan.FromMinutes(1));
         }
 
         public override void WriteOptionsToLog(ILog logger)

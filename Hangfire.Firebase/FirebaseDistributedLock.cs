@@ -10,9 +10,9 @@ namespace Hangfire.Firebase
 {
     internal class FirebaseDistributedLock : IDisposable
     {
-        private FirebaseClient client;
+        private readonly FirebaseClient client;
         private string lockReference;
-        private object syncLock = new object();
+        private readonly object syncLock = new object();
 
         public FirebaseDistributedLock(string resource, TimeSpan timeout, FirebaseClient client)
         {

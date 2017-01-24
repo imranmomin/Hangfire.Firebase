@@ -350,7 +350,7 @@ namespace Hangfire.Firebase
                     Value = value
                 };
 
-                FirebaseResponse response = connection.Client.Push($"lists", data);
+                FirebaseResponse response = connection.Client.Push("lists", data);
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
                     throw new HttpRequestException(response.Body);

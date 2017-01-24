@@ -7,21 +7,21 @@ namespace Hangfire.Firebase.Queue
 {
     internal class FetchedJob : IFetchedJob
     {
-        private FirebaseConnection connection;
+        private readonly FirebaseConnection connection;
 
         public FetchedJob(FirebaseStorage storage, string queue, string jobId, string reference)
         {
-            this.connection = (FirebaseConnection)storage.GetConnection();
+            connection = (FirebaseConnection)storage.GetConnection();
             JobId = jobId;
             Queue = queue;
             Reference = reference;
         }
 
-        private string Reference { get; set; }
+        private string Reference { get; }
 
         public string JobId { get; }
 
-        public string Queue { get; }
+        private string Queue { get; }
 
         public void Dispose()
         {
