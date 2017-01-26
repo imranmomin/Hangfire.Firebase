@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>Hangfire.Firebase</id>
+    <version>1.0.0-beta</version>
+    <authors>Imran Momin</authors>
+    <owners>Imran Momin</owners>
+    <licenseUrl>https://github.com/imranmomin/Hangfire.Firebase/blob/master/LICENSE</licenseUrl>
+    <projectUrl>https://github.com/imranmomin/Hangfire.Firebase</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>This repo will add Google Firebase storage provider for Hangfire</description>
+    <copyright>Copyright 2017</copyright>
+    <tags>Hangfire Firebase</tags>
+    <language>en-US</language>
+    <dependencies>
+      <group targetFramework=".NETFramework4.5">
+        <dependency id="FireSharp" version="2.0.4" />
+        <dependency id="Hangfire.Core" version="1.6.8" />
+      </group>
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="Hangfire.Firebase\bin\Release\Hangfire.Firebase.dll" target="lib\net45\Hangfire.Firebase.dll" />
+  </files>
+</package>
