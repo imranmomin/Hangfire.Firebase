@@ -11,7 +11,6 @@ using Hangfire.Common;
 using Hangfire.Server;
 using Hangfire.Storage;
 using FireSharp.Response;
-using FireSharp.Interfaces;
 using Hangfire.Firebase.Json;
 using Hangfire.Firebase.Queue;
 using Hangfire.Firebase.Entities;
@@ -23,10 +22,10 @@ namespace Hangfire.Firebase
         public FirebaseClient Client { get; }
         public PersistentJobQueueProviderCollection QueueProviders { get; }
 
-        public FirebaseConnection(IFirebaseConfig config, PersistentJobQueueProviderCollection queueProviders)
+        public FirebaseConnection(FirebaseStorage storage)
         {
-            Client = new FirebaseClient(config);
-            QueueProviders = queueProviders;
+            Client = new FirebaseClient(storage.Config);
+            QueueProviders = storage.QueueProviders;
             FireSharp.Extensions.ObjectExtensions.Serializer = new JsonSerializer();
         }
 
