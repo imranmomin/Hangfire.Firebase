@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 using FireSharp.Config;
 using Hangfire.Server;
@@ -9,18 +10,43 @@ using Hangfire.Firebase.Queue;
 
 namespace Hangfire.Firebase
 {
+    /// <summary>
+    /// FirebaseStorage extend the storage option for Hangfire.
+    /// </summary>
     public sealed class FirebaseStorage : JobStorage
     {
         private readonly string url;
 
-        public IFirebaseConfig Config { get; }
-        public FirebaseStorageOptions Options { get; }
-        public PersistentJobQueueProviderCollection QueueProviders { get; }
+        internal IFirebaseConfig Config { get; }
 
+        internal FirebaseStorageOptions Options { get; }
+
+        internal PersistentJobQueueProviderCollection QueueProviders { get; }
+
+        /// <summary>
+        /// Initializes the FirebaseStorage form the url & auth secret provide.
+        /// </summary>
+        /// <param name="url">The url string to Firebase Database</param>
+        /// <param name="authSecret">The secret key for the Firebase Database</param>
+        /// <exception cref="ArgumentNullException"><paramref name="url"/> argument is null.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="authSecret"/> argument is null.</exception>
         public FirebaseStorage(string url, string authSecret) : this(url, authSecret, new FirebaseStorageOptions()) { }
 
+        /// <summary>
+        /// Initializes the FirebaseStorage form the url & auth secret provide.
+        /// </summary>
+        /// <param name="url">The url string to Firebase Database</param>
+        /// <param name="authSecret">The secret key for the Firebase Database</param>
+        /// <param name="options">The FirebaseStorage object to override any of the options</param>
+        /// <exception cref="ArgumentNullException"><paramref name="url"/> argument is null.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="authSecret"/> argument is null.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="options"/> argument is null.</exception>
         public FirebaseStorage(string url, string authSecret, FirebaseStorageOptions options)
         {
+            if (string.IsNullOrEmpty(url)) throw new ArgumentNullException(nameof(url));
+            if (string.IsNullOrEmpty(authSecret)) throw new ArgumentNullException(nameof(authSecret));
+            if (options == null) throw new ArgumentNullException(nameof(options));
+
             Config = new FirebaseConfig
             {
                 AuthSecret = authSecret,
