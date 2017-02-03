@@ -17,7 +17,7 @@ using Hangfire.Firebase.Entities;
 
 namespace Hangfire.Firebase
 {
-    public sealed class FirebaseConnection : JobStorageConnection
+    internal sealed class FirebaseConnection : JobStorageConnection
     {
         public FirebaseClient Client { get; }
         public PersistentJobQueueProviderCollection QueueProviders { get; }
