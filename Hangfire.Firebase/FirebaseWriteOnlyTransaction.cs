@@ -264,8 +264,15 @@ namespace Hangfire.Firebase
                     Dictionary<string, Set> sets = response.ResultAs<Dictionary<string, Set>>();
                     string reference = sets?.Where(s => s.Value.Value == value).Select(s => s.Key).FirstOrDefault();
 
-                    response = !string.IsNullOrEmpty(reference) ? (FirebaseResponse)connection.Client.Set($"sets/{reference}", data)
-                                                                : (FirebaseResponse)connection.Client.Push("sets", data);
+                    if (!string.IsNullOrEmpty(reference))
+                    {
+                        response = connection.Client.Set($"sets/{reference}", data);
+                    }
+                    else
+                    {
+                        response = connection.Client.Push("sets", data);
+                    }
+
 
                     if (response.StatusCode != HttpStatusCode.OK)
                     {
