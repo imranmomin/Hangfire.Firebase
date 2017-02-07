@@ -14,14 +14,15 @@ namespace Hangfire.Firebase.Queue
         private readonly FirebaseStorage storage;
         private readonly FirebaseConnection connection;
         private readonly string dequeueLockKey = "locks:job:dequeue";
-        private readonly TimeSpan defaultLockTimeout = TimeSpan.FromMinutes(2);
-        private readonly TimeSpan checkInterval = TimeSpan.FromSeconds(10);
+        private readonly TimeSpan defaultLockTimeout = TimeSpan.FromMinutes(1);
+        private readonly TimeSpan checkInterval;
         private readonly object syncLock = new object();
 
         public JobQueue(FirebaseStorage storage)
         {
             this.storage = storage;
             connection = (FirebaseConnection)storage.GetConnection();
+            checkInterval = storage.Options.QueuePollInterval;
         }
 
         public IFetchedJob Dequeue(string[] queues, CancellationToken cancellationToken)

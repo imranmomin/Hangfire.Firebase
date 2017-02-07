@@ -1,6 +1,6 @@
 ﻿namespace Hangfire.Firebase.Queue
 {
-    public interface IPersistentJobQueueProvider
+    internal interface IPersistentJobQueueProvider
     {
         IPersistentJobQueue GetJobQueue();
         IPersistentJobQueueMonitoringApi GetJobQueueMonitoringApi();

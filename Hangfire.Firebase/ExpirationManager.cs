@@ -22,12 +22,12 @@ namespace Hangfire.Firebase
         private readonly FirebaseConnection connection;
         private readonly TimeSpan checkInterval;
 
-        public ExpirationManager(FirebaseStorage storage, TimeSpan checkInterval)
+        public ExpirationManager(FirebaseStorage storage)
         {
             if (storage == null) throw new ArgumentNullException(nameof(storage));
 
             connection = (FirebaseConnection)storage.GetConnection();
-            this.checkInterval = checkInterval;
+            checkInterval = storage.Options.ExpirationCheckInterval;
         }
 
         public void Execute(CancellationToken cancellationToken)
@@ -45,15 +45,18 @@ namespace Hangfire.Firebase
                         string[] references = collection?.Where(c => c.Value.ExpireOn.HasValue && c.Value.ExpireOn < DateTime.UtcNow).Select(c => c.Key).ToArray();
                         if (references != null && references.Length > 0)
                         {
-                            Parallel.ForEach(references, reference => connection.Client.Delete($"{document}/{reference}"));
+                            ParallelOptions options = new ParallelOptions { CancellationToken = cancellationToken };
+                            Parallel.ForEach(references, options, (reference) =>
+                            {
+                                options.CancellationToken.ThrowIfCancellationRequested();
+                                connection.Client.Delete($"{document}/{reference}");
+                            });
                         }
                     }
                 }
 
                 Logger.Trace($"Outdated records removed from the '{document}' document.");
-
                 cancellationToken.WaitHandle.WaitOne(checkInterval);
-                cancellationToken.ThrowIfCancellationRequested();
             }
         }
 

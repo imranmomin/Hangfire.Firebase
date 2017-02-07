@@ -21,12 +21,12 @@ namespace Hangfire.Firebase
         private readonly FirebaseConnection connection;
         private readonly TimeSpan checkInterval;
 
-        public CountersAggregator(FirebaseStorage storage, TimeSpan checkInterval)
+        public CountersAggregator(FirebaseStorage storage)
         {
             if (storage == null) throw new ArgumentNullException(nameof(storage));
 
             connection = (FirebaseConnection)storage.GetConnection();
-            this.checkInterval = checkInterval;
+            checkInterval = storage.Options.CountersAggregateInterval;
         }
 
         public void Execute(CancellationToken cancellationToken)
