@@ -24,7 +24,7 @@ namespace Hangfire.Firebase
         internal PersistentJobQueueProviderCollection QueueProviders { get; }
 
         /// <summary>
-        /// Initializes the FirebaseStorage form the url & auth secret provide.
+        /// Initializes the FirebaseStorage form the url &amp; auth secret provide.
         /// </summary>
         /// <param name="url">The url string to Firebase Database</param>
         /// <param name="authSecret">The secret key for the Firebase Database</param>
@@ -33,7 +33,7 @@ namespace Hangfire.Firebase
         public FirebaseStorage(string url, string authSecret) : this(url, authSecret, new FirebaseStorageOptions()) { }
 
         /// <summary>
-        /// Initializes the FirebaseStorage form the url & auth secret provide.
+        /// Initializes the FirebaseStorage form the url &amp; auth secret provide.
         /// </summary>
         /// <param name="url">The url string to Firebase Database</param>
         /// <param name="authSecret">The secret key for the Firebase Database</param>
@@ -62,10 +62,22 @@ namespace Hangfire.Firebase
             QueueProviders = new PersistentJobQueueProviderCollection(provider);
         }
 
+        /// <summary>
+        /// Get the connection object i.e FirebaseConnection
+        /// </summary>
+        /// <returns></returns>
         public override IStorageConnection GetConnection() => new FirebaseConnection(this);
 
+        /// <summary>
+        /// Get the monitorigApi object i.e FirebaseMonitoringApi
+        /// </summary>
+        /// <returns></returns>
         public override IMonitoringApi GetMonitoringApi() => new FirebaseMonitoringApi(this);
 
+        /// <summary>
+        /// Gets the list of IServerComponent
+        /// </summary>
+        /// <returns></returns>
 #pragma warning disable 618
         public override IEnumerable<IServerComponent> GetComponents()
 #pragma warning restore 618
@@ -74,6 +86,10 @@ namespace Hangfire.Firebase
             yield return new CountersAggregator(this);
         }
 
+        /// <summary>
+        /// Writes the FirebaseStorage options to the log
+        /// </summary>
+        /// <param name="logger">The instance of Hangfire.ILog</param>
         public override void WriteOptionsToLog(ILog logger)
         {
             logger.Info("Using the following options for Firebase job storage:");
@@ -85,6 +101,10 @@ namespace Hangfire.Firebase
             logger.Info($"     Queue: {string.Join(",", Options.Queues)}");
         }
 
+        /// <summary>
+        /// Prints the Firebase Database URL
+        /// </summary>
+        /// <returns></returns>
         public override string ToString() => $"Firbase Database : {url}";
 
     }

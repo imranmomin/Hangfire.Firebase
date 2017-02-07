@@ -33,6 +33,9 @@ namespace Hangfire.Firebase
         /// </summary>
         public TimeSpan QueuePollInterval { get; set; }
 
+        /// <summary>
+        /// Initialize the FirebaseStorageOptions class
+        /// </summary>
         public FirebaseStorageOptions()
         {
             RequestTimeout = TimeSpan.FromSeconds(30);

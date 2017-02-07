@@ -3,6 +3,9 @@ using Hangfire.Firebase;
 
 namespace Hangfire
 {
+    /// <summary>
+    /// Extensions methods for FirebaseStorage configuration
+    /// </summary>
     public static class FirebaseStorageExtensions
     {
         /// <summary>
