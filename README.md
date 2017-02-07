@@ -29,9 +29,12 @@ GlobalConfiguration.Configuration.UseStorage(firebaseStorage);
 Firebase.FirebaseStorageOptions firebaseOptions = new Firebase.FirebaseStorageOptions
 {
     Queues = new[] { "default", "critical" },
-    RequestTimeout = System.TimeSpan.FromSeconds(30)
+    RequestTimeout = System.TimeSpan.FromSeconds(30),
+	ExpirationCheckInterval = TimeSpan.FromMinutes(15);
+    CountersAggregateInterval = TimeSpan.FromMinutes(1);
+    QueuePollInterval = TimeSpan.FromSeconds(2);
 };
-Firebase.FirebaseStorage firebaseStorage = new Firebase.FirebaseStorage("<url>", "<authSecret>");
+Firebase.FirebaseStorage firebaseStorage = new Firebase.FirebaseStorage("<url>", "<authSecret>", firebaseOptions);
 GlobalConfiguration.Configuration.UseStorage(firebaseStorage);
 ```
 

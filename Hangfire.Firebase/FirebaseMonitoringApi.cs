@@ -14,7 +14,7 @@ using Hangfire.Storage.Monitoring;
 
 namespace Hangfire.Firebase
 {
-    public sealed class FirebaseMonitoringApi : IMonitoringApi
+    internal sealed class FirebaseMonitoringApi : IMonitoringApi
     {
         private readonly FirebaseConnection connection;
         private readonly FirebaseStorage storage;
@@ -68,6 +68,8 @@ namespace Hangfire.Firebase
 
         public JobDetailsDto JobDetails(string jobId)
         {
+            if (string.IsNullOrEmpty(jobId)) throw new ArgumentNullException(nameof(jobId));
+
             List<StateHistoryDto> states = new List<StateHistoryDto>();
 
             FirebaseResponse response = connection.Client.Get($"jobs/{jobId}");
@@ -300,6 +302,8 @@ namespace Hangfire.Firebase
 
         private JobList<T> GetJobsOnQueue<T>(string queue, int from, int count, Func<string, Common.Job, T> selector)
         {
+            if (string.IsNullOrEmpty(queue)) throw new ArgumentNullException(nameof(queue));
+
             List<KeyValuePair<string, T>> jobs = new List<KeyValuePair<string, T>>();
 
             FirebaseResponse response = connection.Client.Get($"queue/{queue}");
@@ -331,6 +335,8 @@ namespace Hangfire.Firebase
 
         public long EnqueuedCount(string queue)
         {
+            if (string.IsNullOrEmpty(queue)) throw new ArgumentNullException(nameof(queue));
+
             IPersistentJobQueueProvider provider = storage.QueueProviders.GetProvider(queue);
             IPersistentJobQueueMonitoringApi monitoringApi = provider.GetJobQueueMonitoringApi();
             return monitoringApi.GetEnqueuedCount(queue);

@@ -2,7 +2,7 @@
 
 namespace Hangfire.Firebase.Queue
 {
-    public interface IPersistentJobQueueMonitoringApi
+    internal interface IPersistentJobQueueMonitoringApi
     {
         IEnumerable<string> GetQueues();
         IEnumerable<string> GetEnqueuedJobIds(string queue, int from, int perPage);
