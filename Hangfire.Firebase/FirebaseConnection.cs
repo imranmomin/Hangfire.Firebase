@@ -174,8 +174,8 @@ namespace Hangfire.Firebase
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 Parameter[] parameters = response.ResultAs<Parameter[]>();
-                int index = parameters.Where(p => p.Name == name).Select((p, i) => i + 1).FirstOrDefault();
-
+                int index = parameters.Select((p, i) => new { p.Name, i }).Where(p => p.Name == name).Select(p => p.i + 1).FirstOrDefault();
+                
                 if (index > 0) Client.Set($"jobs/{id}/parameters/{index - 1}/value", value);
                 else Client.Set($"jobs/{id}/parameters/{parameters.Length}", parameter);
             }
