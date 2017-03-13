@@ -21,5 +21,6 @@
   </metadata>
   <files>
     <file src="Hangfire.Firebase\bin\Release\Hangfire.Firebase.dll" target="lib\net45\Hangfire.Firebase.dll" />
+    <file src="Hangfire.Firebase\bin\Release\Hangfire.Firebase.XML" target="lib\net45\Hangfire.Firebase.XML" />
   </files>
 </package>
