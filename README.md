@@ -1,7 +1,7 @@
 # Hangfire.Firebase
 
 [![Official Site](https://img.shields.io/badge/site-hangfire.io-blue.svg)](http://hangfire.io)
-[![Latest version](https://img.shields.io/badge/nuget-v1.0.0-blue.svg)](https://www.nuget.org/packages/Hangfire.Firebase) 
+[![Latest version](https://img.shields.io/badge/nuget-v1.0.1-blue.svg)](https://www.nuget.org/packages/Hangfire.Firebase) 
 [![Build status](https://ci.appveyor.com/api/projects/status/8bail001djs64inu?svg=true)](https://ci.appveyor.com/project/imranmomin/hangfire-firebase)
 
 This repo will add a [Google Firebase](https://firebase.google.com) storage support to [Hangfire](http://hangfire.io) - fire-and-forget, delayed and recurring tasks runner for .NET. Scalable and reliable background job runner. Supports multiple servers, CPU and I/O intensive, long-running and short-running jobs.
