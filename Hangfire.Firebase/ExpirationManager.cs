@@ -18,7 +18,7 @@ namespace Hangfire.Firebase
         private static readonly ILog Logger = LogProvider.For<ExpirationManager>();
         private const string distributedLockKey = "expirationmanager";
         private static readonly TimeSpan defaultLockTimeout = TimeSpan.FromMinutes(5);
-        private static readonly string[] documents = { "locks", "jobs", "lists", "sets", "hashs", "counters/aggregrated" };
+        private static readonly string[] documents = { "locks", "jobs", "lists", "sets", "hashes", "counters/aggregrated" };
         private readonly FirebaseConnection connection;
         private readonly TimeSpan checkInterval;
 
