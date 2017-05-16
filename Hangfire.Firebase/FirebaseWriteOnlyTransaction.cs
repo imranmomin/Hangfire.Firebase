@@ -10,6 +10,7 @@ using Hangfire.Firebase.Queue;
 using Hangfire.States;
 using Hangfire.Storage;
 using FireSharp;
+using Hangfire.Firebase.Helper;
 
 namespace Hangfire.Firebase
 {
@@ -292,6 +293,7 @@ namespace Hangfire.Firebase
 
             QueueCommand(() =>
             {
+                key = key.ToValidKey();
                 FirebaseResponse response = connection.Client.Delete($"hashes/{key}");
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
@@ -313,6 +315,7 @@ namespace Hangfire.Firebase
                     Value = k.Value
                 }).ToList();
 
+                key = key.ToValidKey();
                 FirebaseResponse response = connection.Client.Get($"hashes/{key}");
                 if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
                 {

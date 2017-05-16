@@ -13,6 +13,7 @@ using Hangfire.Storage;
 using FireSharp.Response;
 using Hangfire.Firebase.Json;
 using Hangfire.Firebase.Queue;
+using Hangfire.Firebase.Helper;
 using Hangfire.Firebase.Entities;
 
 namespace Hangfire.Firebase
@@ -175,7 +176,7 @@ namespace Hangfire.Firebase
             {
                 Parameter[] parameters = response.ResultAs<Parameter[]>();
                 int index = parameters.Select((p, i) => new { p.Name, i }).Where(p => p.Name == name).Select(p => p.i + 1).FirstOrDefault();
-                
+
                 if (index > 0) Client.Set($"jobs/{id}/parameters/{index - 1}/value", value);
                 else Client.Set($"jobs/{id}/parameters/{parameters.Length}", parameter);
             }
@@ -420,6 +421,7 @@ namespace Hangfire.Firebase
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
+            key = key.ToValidKey();
             FirebaseResponse response = Client.Get($"hashes/{key}");
             if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
@@ -435,12 +437,13 @@ namespace Hangfire.Firebase
             if (key == null) throw new ArgumentNullException(nameof(key));
             if (keyValuePairs == null) throw new ArgumentNullException(nameof(keyValuePairs));
 
-            List<Hash> hashes = keyValuePairs.Select(k => new Hash
+           List<Hash> hashes = keyValuePairs.Select(k => new Hash
             {
                 Field = k.Key,
                 Value = k.Value
             }).ToList();
 
+            key = key.ToValidKey();
             FirebaseResponse response = Client.Get($"hashes/{key}");
             if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
@@ -471,6 +474,7 @@ namespace Hangfire.Firebase
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
+            key = key.ToValidKey();
             QueryBuilder builder = QueryBuilder.New().Shallow(true);
             FirebaseResponse response = Client.Get($"hashes/{key}", builder);
             if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
@@ -487,6 +491,7 @@ namespace Hangfire.Firebase
             if (key == null) throw new ArgumentNullException(nameof(key));
             if (name == null) throw new ArgumentNullException(nameof(name));
 
+            key = key.ToValidKey();
             FirebaseResponse response = Client.Get($"hashes/{key}");
             if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
@@ -501,6 +506,7 @@ namespace Hangfire.Firebase
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
+            key = key.ToValidKey();
             FirebaseResponse response = Client.Get($"hashes/{key}");
             if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
