@@ -437,7 +437,7 @@ namespace Hangfire.Firebase
             if (key == null) throw new ArgumentNullException(nameof(key));
             if (keyValuePairs == null) throw new ArgumentNullException(nameof(keyValuePairs));
 
-           List<Hash> hashes = keyValuePairs.Select(k => new Hash
+            List<Hash> hashes = keyValuePairs.Select(k => new Hash
             {
                 Field = k.Key,
                 Value = k.Value
@@ -526,7 +526,9 @@ namespace Hangfire.Firebase
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            FirebaseResponse response = Client.Get($"lists/{key}");
+            QueryBuilder builder = QueryBuilder.New($@"equalTo=""{key}""");
+            builder.OrderBy("key");
+            FirebaseResponse response = Client.Get("lists", builder);
             if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, List> lists = response.ResultAs<Dictionary<string, List>>();
@@ -540,7 +542,9 @@ namespace Hangfire.Firebase
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            FirebaseResponse response = Client.Get($"lists/{key}");
+            QueryBuilder builder = QueryBuilder.New($@"equalTo=""{key}""");
+            builder.OrderBy("key");
+            FirebaseResponse response = Client.Get("lists", builder);
             if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, List> lists = response.ResultAs<Dictionary<string, List>>();
@@ -557,7 +561,9 @@ namespace Hangfire.Firebase
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            FirebaseResponse response = Client.Get($"lists/{key}");
+            QueryBuilder builder = QueryBuilder.New($@"equalTo=""{key}""");
+            builder.OrderBy("key");
+            FirebaseResponse response = Client.Get("lists", builder);
             if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, List> lists = response.ResultAs<Dictionary<string, List>>();
@@ -572,11 +578,12 @@ namespace Hangfire.Firebase
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            QueryBuilder builder = QueryBuilder.New().Shallow(true);
-            FirebaseResponse response = Client.Get($"lists/{key}", builder);
+            QueryBuilder builder = QueryBuilder.New($@"equalTo=""{key}""");
+            builder.OrderBy("key");
+            FirebaseResponse response = Client.Get("lists", builder);
             if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
-                string[] lists = response.ResultAs<string[]>();
+                Dictionary<string, List> lists = response.ResultAs<Dictionary<string, List>>();
                 return lists.LongCount();
             }
 
