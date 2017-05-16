@@ -103,6 +103,7 @@
     <Compile Include="FirebaseStorageExtensions.cs" />
     <Compile Include="FirebaseStorageOptions.cs" />
     <Compile Include="FirebaseWriteOnlyTransaction.cs" />
+    <Compile Include="Helper\StringExtension.cs" />
     <Compile Include="Json\JsonSerializer.cs" />
     <Compile Include="Json\LowerCaseDelimitedPropertyNamesContractResovler.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
