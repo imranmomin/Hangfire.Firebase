@@ -194,45 +194,53 @@ namespace Hangfire.Firebase
 
         public JobList<EnqueuedJobDto> EnqueuedJobs(string queue, int from, int perPage)
         {
-            return GetJobsOnQueue(queue, from, perPage, (state, job) => new EnqueuedJobDto
+            List<KeyValuePair<string, EnqueuedJobDto>> result = GetJobsOnQueue(queue, from, perPage, (state, job) => new EnqueuedJobDto
             {
                 Job = job,
                 State = state
-            });
+            }).OrderByDescending(j => j.Value.EnqueuedAt).ToList();
+
+            return new JobList<EnqueuedJobDto>(result);
         }
 
         public JobList<FetchedJobDto> FetchedJobs(string queue, int from, int perPage)
         {
-            return GetJobsOnQueue(queue, from, perPage, (state, job) => new FetchedJobDto
+            List<KeyValuePair<string, FetchedJobDto>> result = GetJobsOnQueue(queue, from, perPage, (state, job) => new FetchedJobDto
             {
                 Job = job,
                 State = state
-            });
+            }).OrderByDescending(j => j.Value.FetchedAt).ToList();
+
+            return new JobList<FetchedJobDto>(result);
         }
 
         public JobList<ProcessingJobDto> ProcessingJobs(int from, int count)
         {
-            return GetJobsOnState(States.ProcessingState.StateName, from, count, (state, job) => new ProcessingJobDto
+            List<KeyValuePair<string, ProcessingJobDto>> result = GetJobsOnState(States.ProcessingState.StateName, from, count, (state, job) => new ProcessingJobDto
             {
                 Job = job,
                 ServerId = state.Data.ContainsKey("ServerId") ? state.Data["ServerId"] : state.Data["ServerName"],
                 StartedAt = JobHelper.DeserializeDateTime(state.Data["StartedAt"])
-            });
+            }).OrderByDescending(j => j.Value.StartedAt).ToList();
+
+            return new JobList<ProcessingJobDto>(result);
         }
 
         public JobList<ScheduledJobDto> ScheduledJobs(int from, int count)
         {
-            return GetJobsOnState(States.ScheduledState.StateName, from, count, (state, job) => new ScheduledJobDto
+            List<KeyValuePair<string, ScheduledJobDto>> result = GetJobsOnState(States.ScheduledState.StateName, from, count, (state, job) => new ScheduledJobDto
             {
                 Job = job,
                 EnqueueAt = JobHelper.DeserializeDateTime(state.Data["EnqueueAt"]),
                 ScheduledAt = JobHelper.DeserializeDateTime(state.Data["ScheduledAt"])
-            });
+            }).OrderByDescending(j => j.Value.ScheduledAt).ToList();
+
+            return new JobList<ScheduledJobDto>(result);
         }
 
         public JobList<SucceededJobDto> SucceededJobs(int from, int count)
         {
-            return GetJobsOnState(States.SucceededState.StateName, from, count, (state, job) => new SucceededJobDto
+            List<KeyValuePair<string, SucceededJobDto>> result = GetJobsOnState(States.SucceededState.StateName, from, count, (state, job) => new SucceededJobDto
             {
                 Job = job,
                 Result = state.Data.ContainsKey("Result") ? state.Data["Result"] : null,
@@ -240,12 +248,14 @@ namespace Hangfire.Firebase
                                 ? (long?)long.Parse(state.Data["PerformanceDuration"]) + long.Parse(state.Data["Latency"])
                                 : null,
                 SucceededAt = JobHelper.DeserializeNullableDateTime(state.Data["SucceededAt"])
-            });
+            }).OrderByDescending(j => j.Value.SucceededAt).ToList();
+
+            return new JobList<SucceededJobDto>(result);
         }
 
         public JobList<FailedJobDto> FailedJobs(int from, int count)
         {
-            return GetJobsOnState(States.FailedState.StateName, from, count, (state, job) => new FailedJobDto
+            List<KeyValuePair<string, FailedJobDto>> result = GetJobsOnState(States.FailedState.StateName, from, count, (state, job) => new FailedJobDto
             {
                 Job = job,
                 Reason = state.Reason,
@@ -253,54 +263,73 @@ namespace Hangfire.Firebase
                 ExceptionDetails = state.Data["ExceptionDetails"],
                 ExceptionMessage = state.Data["ExceptionMessage"],
                 ExceptionType = state.Data["ExceptionType"],
-            });
+            }).OrderByDescending(j => j.Value.FailedAt).ToList();
+
+            return new JobList<FailedJobDto>(result);
         }
 
         public JobList<DeletedJobDto> DeletedJobs(int from, int count)
         {
-            return GetJobsOnState(States.DeletedState.StateName, from, count, (state, job) => new DeletedJobDto
+            List<KeyValuePair<string, DeletedJobDto>> result = GetJobsOnState(States.DeletedState.StateName, from, count, (state, job) => new DeletedJobDto
             {
                 Job = job,
                 DeletedAt = JobHelper.DeserializeNullableDateTime(state.Data["DeletedAt"])
-            });
+            }).OrderByDescending(j => j.Value.DeletedAt).ToList();
+
+            return new JobList<DeletedJobDto>(result);
         }
 
-        private JobList<T> GetJobsOnState<T>(string stateName, int from, int count, Func<State, Common.Job, T> selector)
+        private List<KeyValuePair<string, T>> GetJobsOnState<T>(string stateName, int from, int count, Func<State, Common.Job, T> selector)
         {
             List<KeyValuePair<string, T>> jobs = new List<KeyValuePair<string, T>>();
 
-            QueryBuilder builder = QueryBuilder.New($@"equalTo=""{stateName}""");
-            builder.OrderBy("state_name");
-            FirebaseResponse response = connection.Client.Get("jobs", builder);
+            FirebaseResponse response = connection.Client.Get("jobs");
             if (response.StatusCode == HttpStatusCode.OK && !response.IsNull())
             {
                 Dictionary<string, Entities.Job> collections = response.ResultAs<Dictionary<string, Entities.Job>>();
-                string[] references = collections.Skip(from).Take(count).Select(k => k.Key).ToArray();
-                Parallel.ForEach(references, reference =>
+                string[] references = collections.Where(s => s.Value.StateName.Equals(stateName, StringComparison.InvariantCulture))
+                    .Skip(from).Take(count)
+                    .Select(k => k.Key)
+                    .ToArray();
+
+                if (references.Any())
                 {
-                    Entities.Job job;
-                    if (collections.TryGetValue(reference, out job))
+                    // get all states
+                    Dictionary<string, State> states = new Dictionary<string, State>();
+                    FirebaseResponse stateResponse = connection.Client.Get("states");
+                    if (stateResponse.StatusCode == HttpStatusCode.OK && !stateResponse.IsNull())
                     {
-                        FirebaseResponse stateResponse = connection.Client.Get($"states/{reference}/{job.StateId}");
-                        if (stateResponse.StatusCode == HttpStatusCode.OK && !stateResponse.IsNull())
-                        {
-                            State state = stateResponse.ResultAs<State>();
-                            state.Data = state.Data.Trasnform();
-
-                            InvocationData invocationData = job.InvocationData;
-                            invocationData.Arguments = job.Arguments;
-
-                            T data = selector(state, invocationData.Deserialize());
-                            jobs.Add(new KeyValuePair<string, T>(reference, data));
-                        }
+                        Dictionary<string, Dictionary<string, State>> stateCollections = stateResponse.ResultAs<Dictionary<string, Dictionary<string, State>>>();
+                        states = stateCollections.Where(s => references.Contains(s.Key))
+                            .SelectMany(s => s.Value)
+                            .ToDictionary(k => k.Key, v => v.Value);
                     }
-                });
+
+                    Array.ForEach(references, reference =>
+                    {
+                        Entities.Job job;
+                        if (collections.TryGetValue(reference, out job))
+                        {
+                            State state;
+                            if (states.TryGetValue(job.StateId, out state))
+                            {
+                                state.Data = state.Data.Trasnform();
+
+                                InvocationData invocationData = job.InvocationData;
+                                invocationData.Arguments = job.Arguments;
+
+                                T data = selector(state, invocationData.Deserialize());
+                                jobs.Add(new KeyValuePair<string, T>(reference, data));
+                            }
+                        }
+                    });
+                }
             }
 
-            return new JobList<T>(jobs);
+            return jobs;
         }
 
-        private JobList<T> GetJobsOnQueue<T>(string queue, int from, int count, Func<string, Common.Job, T> selector)
+        private List<KeyValuePair<string, T>> GetJobsOnQueue<T>(string queue, int from, int count, Func<string, Common.Job, T> selector)
         {
             if (string.IsNullOrEmpty(queue)) throw new ArgumentNullException(nameof(queue));
 
@@ -311,22 +340,33 @@ namespace Hangfire.Firebase
             {
                 Dictionary<string, string> collection = response.ResultAs<Dictionary<string, string>>();
                 string[] references = collection.Skip(from).Take(count).Select(k => k.Value).ToArray();
-                Parallel.ForEach(references, reference =>
-                {
-                    FirebaseResponse jobResponse = connection.Client.Get($"jobs/{reference}");
-                    if (jobResponse.StatusCode == HttpStatusCode.OK && !jobResponse.IsNull())
-                    {
-                        Entities.Job job = jobResponse.ResultAs<Entities.Job>();
-                        InvocationData invocationData = job.InvocationData;
-                        invocationData.Arguments = job.Arguments;
 
-                        T data = selector(job.StateName, invocationData.Deserialize());
-                        jobs.Add(new KeyValuePair<string, T>(reference, data));
+                if (references.Any())
+                {
+                    // get all jobs
+                    Dictionary<string, Entities.Job> jobCollection = new Dictionary<string, Entities.Job>();
+                    FirebaseResponse stateResponse = connection.Client.Get("jobs");
+                    if (stateResponse.StatusCode == HttpStatusCode.OK && !stateResponse.IsNull())
+                    {
+                        jobCollection = stateResponse.ResultAs<Dictionary<string, Entities.Job>>();
                     }
-                });
+
+                    Array.ForEach(references, reference =>
+                    {
+                        Entities.Job job;
+                        if (jobCollection.TryGetValue(reference, out job))
+                        {
+                            InvocationData invocationData = job.InvocationData;
+                            invocationData.Arguments = job.Arguments;
+
+                            T data = selector(job.StateName, invocationData.Deserialize());
+                            jobs.Add(new KeyValuePair<string, T>(reference, data));
+                        }
+                    });
+                }
             }
 
-            return new JobList<T>(jobs);
+            return jobs;
         }
 
         #endregion
